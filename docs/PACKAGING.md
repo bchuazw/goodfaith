@@ -68,7 +68,7 @@ Open-source maintainers are drowning in AI-generated vulnerability reports that 
 **Recording:**
 - Playwright drives the real app at 1440×900, with clean seeded data and fixed demo accounts.
 - Every PayPal id on screen is real and matches the sandbox dashboard.
-- Voice: decide by Nov 1.
+- Voice: Gemini TTS (`gemini-3.8-flash-tts`, voice "Kore") works on the free key; a sample was verified on 2026-10-24. Decide on it, or Brian's own voice, by Nov 1.
   - This machine only has legacy SAPI voices (David, Zira, Mark), which are too robotic.
   - Options: Gemini TTS with a free AI Studio key (natural, $0; the key also gives the hosted demo a fallback LLM that never expires), the user's own voice, or captions only.
 - Music: none, or a CC0 track.
@@ -131,7 +131,8 @@ The hosted URL, the `/demo` judge mode, the sandbox buyer login for the PayPal a
 | Payouts pay once per report, even on retries | the live sandbox test `Payouts: … pays a sender_batch_id once` | verified 2026-10-24 |
 | An unregistered recipient's payout shows UNCLAIMED, not lost | the same live test (RECEIVER_UNREGISTERED) | verified 2026-10-24 |
 | Charging or releasing a hold works with no buyer present | the live suite (authorize → partial capture → void) | verified 2026-10-23 |
-| "N of N curl slop reports flagged; 0 real CVEs flagged" | the triage evals, real-world corpus | TBD |
+| On curl's real reports: 0 of 5 real CVE reports flagged as slop; 2 of 10 published slop reports caught with hard evidence (they cite code that doesn't exist); the other 8 cite real code and go to a human, never punished automatically | `packages/triage/evals/results.curl.json` | measured 2026-10-24. Say it this way: never "catches all slop". |
+| Lantern evals: 30/30 correct scripted; 6/6 with live Claude Opus 5.5; false-SLOP 0 | `evals/results.json`, `results.live.json` | measured 2026-10-24 |
 | Median time to triage | measured from hosted runs | TBD |
 
 ## 6. Visual assets
