@@ -95,6 +95,20 @@ export type ReportView = {
   payoutEmail?: string;
   options?: Record<SettlementAction, ActionOption>;
   ledger?: LedgerLine[];
+  codeEvidence?: CodeEvidence[];
+};
+
+/** A code-reference check with the source it points at (maintainer view). */
+export type CodeEvidence = {
+  status: "pass" | "fail" | "inconclusive";
+  title: string;
+  detail: string;
+  version?: string;
+  path?: string;
+  symbol?: string;
+  line?: number;
+  nearMatch?: string;
+  snippet?: { startLine: number; lines: string[]; highlight?: number };
 };
 
 export type QueueRow = {

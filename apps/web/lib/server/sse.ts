@@ -9,7 +9,7 @@
 import type { ReportView } from "../view-types";
 import type { Services } from "./services";
 import { triageEvents } from "./triage";
-import { type Audience, reportView } from "./views";
+import { type Audience, eventsFor, reportView } from "./views";
 
 export type StreamOptions = { afterSeq?: number; audience?: Audience; signal?: AbortSignal; pollMs?: number; maxMs?: number; heartbeatMs?: number };
 
@@ -53,7 +53,7 @@ export function reportEventStream(svc: Services, reportId: string, opts: StreamO
       let lastBeat = Date.now();
       const started = Date.now();
       const flushEvents = async () => {
-        for (const e of await triageEvents(svc, reportId, cursor)) {
+        for (const e of eventsFor(await triageEvents(svc, reportId, cursor), audience)) {
           send(frame("triage", e, e.seq));
           cursor = e.seq;
         }

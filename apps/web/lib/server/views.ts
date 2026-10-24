@@ -1,5 +1,6 @@
 /** Builds the browser-facing views (lib/view-types.ts) from stored records. */
-import type { DepositView, PayoutView, QueueRow, ReportView } from "../view-types";
+import type { TriageEvent, TriageVerdict } from "@goodfaith/core";
+import type { CodeEvidence, DepositView, PayoutView, QueueRow, ReportView } from "../view-types";
 import { notFound } from "./errors";
 import { maybeRefreshPayout } from "./payouts";
 import type { Services } from "./services";
@@ -8,6 +9,17 @@ import type { DepositRecord, PayoutRecord, ReportRecord } from "./store";
 import { reconcileTriage } from "./triage";
 
 export type Audience = "researcher" | "maintainer";
+
+/**
+ * Triage events as an audience may see them: the researcher gets the researcher-facing summary in the
+ * verdict event, never the maintainer's notes.
+ */
+export function eventsFor<E extends { event: TriageEvent }>(events: E[], audience: Audience): E[] {
+  if (audience === "maintainer") return events;
+  return events.map((e) =>
+    e.event.type === "verdict" ? { ...e, event: { ...e.event, verdict: { ...e.event.verdict, summary: e.event.verdict.researcherSummary } } } : e,
+  );
+}
 
 /** "mkdir.p.research@example.com" -> "mk•••@example.com". */
 export function maskEmail(email: string): string {
@@ -104,8 +116,58 @@ export async function reportView(svc: Services, reportId: string, audience: Audi
     if (report.payoutEmail) view.payoutEmail = report.payoutEmail;
     view.options = settlementOptions({ report, ...(deposit ? { deposit } : {}), ...(payout ? { payout } : {}), ...(verdict ? { verdict } : {}) });
     view.ledger = await svc.db.ledger.read(report.id);
+    if (verdict) view.codeEvidence = await codeEvidence(svc, verdict, report.input.claimedVersion);
   }
   return view;
+}
+
+/** Each code-reference finding with the lines it points at, read from the program's code source. */
+async function codeEvidence(svc: Services, verdict: TriageVerdict, claimedVersion?: string): Promise<CodeEvidence[]> {
+  const version = verdict.claims.version ?? claimedVersion;
+  const ref = version ? await svc.code.resolveVersion(version).catch(() => undefined) : undefined;
+  const out: CodeEvidence[] = [];
+  for (const f of verdict.findings.filter((x) => x.kind === "code_ref")) {
+    const ev = (f.evidence ?? {}) as { path?: string; symbol?: string; nearMatch?: string; locations?: Array<{ path: string; line?: number }> };
+    let path = ev.path ?? ev.locations?.[0]?.path;
+    let line = ev.locations?.[0]?.line;
+    if (ref && ev.symbol && f.status === "pass") {
+      const defs = await svc.code.findSymbol(ev.symbol, ref).catch(() => []);
+      const def = defs.find((d) => !path || d.path === path) ?? defs[0];
+      if (def) {
+        path = def.path;
+        line = def.line;
+      }
+    }
+    if (ref && ev.nearMatch && f.status === "inconclusive") {
+      const defs = await svc.code.findSymbol(ev.nearMatch, ref).catch(() => []);
+      if (defs[0]) {
+        path = path ?? defs[0].path;
+        line = defs[0].line;
+      }
+    }
+    let snippet: CodeEvidence["snippet"];
+    if (ref && path && f.status !== "fail") {
+      const text = await svc.code.readFile(path, ref).catch(() => undefined);
+      if (text) {
+        const lines = text.split(/\r?\n/);
+        const at = line ?? 1;
+        const start = Math.max(1, at - 3);
+        snippet = { startLine: start, lines: lines.slice(start - 1, start + 9), ...(line ? { highlight: line } : {}) };
+      }
+    }
+    out.push({
+      status: f.status,
+      title: f.title,
+      detail: f.detail,
+      ...(ref ? { version: ref } : {}),
+      ...(path ? { path } : {}),
+      ...(ev.symbol ? { symbol: ev.symbol } : {}),
+      ...(line ? { line } : {}),
+      ...(ev.nearMatch ? { nearMatch: ev.nearMatch } : {}),
+      ...(snippet ? { snippet } : {}),
+    });
+  }
+  return out;
 }
 
 export async function queueRows(svc: Services): Promise<QueueRow[]> {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { approveDeposit, createDepositOrder } from "@/lib/server/deposits";
-import { HERO_REPORTS } from "@/lib/server/hero-reports";
+import { HERO_REPORTS } from "@/lib/hero-reports";
 import { submitReport } from "@/lib/server/reports";
 import { settle, settlementContext } from "@/lib/server/settlement";
 import { createFundingOrder } from "@/lib/server/sponsor";

@@ -63,6 +63,13 @@ describe("report event stream (tails the Store)", () => {
     const frames = await readFrames(reportEventStream(env.svc, id, { pollMs: 5 }));
     const view = frames.filter((f) => f.event === "report").at(-1)?.data as { verdict: { summary: string; researcherSummary: string }; options?: unknown; ledger?: unknown };
     expect(view.verdict.summary).toBe(view.verdict.researcherSummary);
+    const verdictFrame = frames.find((f) => f.event === "triage" && (f.data as { event: { type: string } }).event.type === "verdict")?.data as {
+      event: { verdict: { summary: string; researcherSummary: string } };
+    };
+    expect(verdictFrame.event.verdict.summary).toBe(verdictFrame.event.verdict.researcherSummary);
+    const maintainer = await readFrames(reportEventStream(env.svc, id, { pollMs: 5, audience: "maintainer" }));
+    const mv = maintainer.find((f) => f.event === "triage" && (f.data as { event: { type: string } }).event.type === "verdict")?.data as typeof verdictFrame;
+    expect(mv.event.verdict.summary).not.toBe(mv.event.verdict.researcherSummary);
     expect(view.options).toBeUndefined();
     expect(view.ledger).toBeUndefined();
   });

@@ -6,7 +6,7 @@
 import { isMockPayPal } from "@goodfaith/paypal";
 import { postDemoDeposit } from "./deposits";
 import { AppError } from "./errors";
-import { HERO_REPORTS, type HeroKey } from "./hero-reports";
+import { HERO_REPORTS, type HeroKey } from "../hero-reports";
 import { submitReport } from "./reports";
 import type { Services } from "./services";
 

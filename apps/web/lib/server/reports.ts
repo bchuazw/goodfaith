@@ -5,7 +5,7 @@
 import { httpPocSchema, type ReportInput, reportInputSchema, SEVERITIES } from "@goodfaith/core";
 import { z } from "zod";
 import { AppError } from "./errors";
-import { composeReportBody } from "./hero-reports";
+import { composeReportBody } from "../hero-reports";
 import { newReportId } from "./ids";
 import type { Services } from "./services";
 import type { ReportRecord } from "./store";

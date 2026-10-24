@@ -2,7 +2,7 @@ import { createLlm } from "@goodfaith/llm";
 import { createMockPayPal, type MockPayPal } from "@goodfaith/paypal";
 import { triageReport } from "@goodfaith/triage";
 import { approveDeposit, createDepositOrder } from "@/lib/server/deposits";
-import { composeReportBody, HERO_REPORTS, type HeroKey } from "@/lib/server/hero-reports";
+import { composeReportBody, HERO_REPORTS, type HeroKey } from "@/lib/hero-reports";
 import { submitReport } from "@/lib/server/reports";
 import { createServices, type Services } from "@/lib/server/services";
 import { createMemoryStore, type Store } from "@/lib/server/store";

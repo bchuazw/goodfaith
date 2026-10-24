@@ -76,8 +76,8 @@ export const HERO_REPORTS: Record<HeroKey, HeroReport> = {
     affectedCode: "- `src/notes.ts`, the `GET /api/notes/:id` handler in `registerNoteRoutes()`",
     description: [
       "`GET /api/notes/:id` looks the note up by id and returns it to any authenticated user. It never compares",
-      "`note.ownerId` with the caller, so private notes leak to anyone who asks for their id. Ids are sequential",
-      "(`note_1`, `note_2`, ...), so every note is enumerable.",
+      "`note.ownerId` with the caller, so private notes leak to anyone who asks for their id. Note ids are sequential",
+      "(note_1, note_2, and so on), so every note is enumerable.",
     ].join("\n"),
     impact: "Any registered user can read every other user's private notes.",
     poc: { steps: [{ method: "GET", path: "/api/notes/note_2", as: "alice" }] },
