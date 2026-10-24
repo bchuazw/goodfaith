@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Judge mode" };
 export default async function DemoPage() {
   const { svc, error } = servicesOrError();
   if (!svc) return <p className="mx-auto max-w-6xl px-4 py-16 text-danger-strong">{error}</p>;
-  const latest = await latestScenarioReports(svc);
+  const { round, reports: latest } = await latestScenarioReports(svc);
   const runs: Partial<Record<HeroKey, { view: ReportView; events: StreamTriageEvent[] }>> = {};
   for (const key of Object.keys(HERO_REPORTS) as HeroKey[]) {
     const id = latest[key];
@@ -26,6 +26,7 @@ export default async function DemoPage() {
   return (
     <JudgeMode
       runs={runs}
+      {...(round ? { round } : {})}
       bounties={svc.program.bounties}
       deposit={svc.program.deposit}
       mode={{ app: svc.mode.app, paypal: svc.mode.paypal, vault: !!svc.config.sandboxVaultId, model: svc.mode.llm.model }}

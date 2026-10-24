@@ -36,6 +36,7 @@ async function priorReports(svc: Services, report: ReportRecord): Promise<PriorR
   const out: PriorReport[] = [];
   for (const r of await svc.db.reports.list()) {
     if (r.id === report.id || r.programId !== report.programId || r.input.submittedAt > report.input.submittedAt) continue;
+    if ((r.demoRound ?? "") !== (report.demoRound ?? "")) continue; // judge-mode rounds are isolated
     const v = await svc.db.verdicts.value(r.id);
     if (!v) continue;
     out.push({

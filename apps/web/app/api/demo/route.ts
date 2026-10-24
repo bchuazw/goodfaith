@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const bodySchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("run"), scenario: z.string() }),
+  z.object({ action: z.literal("run"), scenario: z.string(), round: z.string().regex(/^[a-z0-9-]{4,40}$/) }),
   z.object({ action: z.literal("reset") }),
   z.object({ action: z.literal("fund"), amount: z.string().default("1000") }),
 ]);
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     const body = parsed.data;
     if (body.action === "run") {
       if (!isHeroKey(body.scenario)) throw new AppError("UNKNOWN_SCENARIO", `No scenario "${body.scenario}"`, 404);
-      return json(await runScenario(svc, body.scenario, { origin: requestOrigin(req, svc) }), { status: 201 });
+      return json(await runScenario(svc, body.scenario, { origin: requestOrigin(req, svc), round: body.round }), { status: 201 });
     }
     if (body.action === "reset") {
       if (svc.mode.app !== "mock") throw new AppError("MOCK_ONLY", "Reset exists only in mock mode", 409);

@@ -24,16 +24,20 @@ type Mode = { app: "mock" | "live"; paypal: "mock" | "sandbox" | "live"; vault: 
 const ORDER: HeroKey[] = ["slop", "idor", "duplicate"];
 const SETTLE_LABEL = { capture: "capture the deposit", pay: "pay the bounty", release: "release the deposit" } as const;
 
-export function JudgeMode({ runs, bounties, deposit, mode }: { runs: Partial<Record<HeroKey, Run>>; bounties: Record<Severity, Money>; deposit: Money; mode: Mode }) {
+const newRound = () => `round-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+export function JudgeMode({ runs, round: initialRound, bounties, deposit, mode }: { runs: Partial<Record<HeroKey, Run>>; round?: string; bounties: Record<Severity, Money>; deposit: Money; mode: Mode }) {
   const router = useRouter();
   const [state, setState] = useState(runs);
+  // Reports in one round dedupe only against each other, so every round can replay the same story.
+  const [round, setRound] = useState(() => initialRound ?? newRound());
   const [busy, setBusy] = useState<string>();
   const idorReproduced = state.idor?.view.verdict?.verdict === "REPRODUCED";
 
   const run = async (key: HeroKey) => {
     setBusy(key);
     try {
-      const { reportId } = await api<{ reportId: string }>("/api/demo", { body: { action: "run", scenario: key } });
+      const { reportId } = await api<{ reportId: string }>("/api/demo", { body: { action: "run", scenario: key, round } });
       const view = await api<ReportView>(`/api/reports/${reportId}?view=maintainer`);
       setState((s) => ({ ...s, [key]: { view, events: [] } }));
     } catch (e) {
@@ -103,7 +107,7 @@ export function JudgeMode({ runs, bounties, deposit, mode }: { runs: Partial<Rec
                 </div>
                 <Button onClick={() => run(key)} disabled={!!busy || locked} variant={current ? "outline" : "default"} className="gap-2">
                   {busy === key ? <LoaderCircleIcon className="animate-spin" /> : current ? <RotateCcwIcon /> : <PlayIcon />}
-                  {current ? "Run again" : "Submit and post the deposit"}
+                  {current ? "Submit again" : "Submit and post the deposit"}
                 </Button>
               </div>
               {locked && !current && <p className="px-5 pb-5 text-sm text-muted-foreground sm:px-6">Unlocks once the real IDOR (run 2) has reproduced: a duplicate needs an original to match.</p>}
@@ -114,6 +118,16 @@ export function JudgeMode({ runs, bounties, deposit, mode }: { runs: Partial<Rec
       </ol>
 
       <footer className="mt-10 flex flex-wrap items-center gap-3 border-t pt-6">
+        <Button
+          variant="outline"
+          onClick={() => {
+            setRound(newRound());
+            setState({});
+          }}
+          disabled={!!busy || Object.keys(state).length === 0}
+        >
+          <RotateCcwIcon /> Start a new round
+        </Button>
         <Button asChild variant="outline">
           <Link href="/console">
             Open the maintainer console <ArrowRightIcon />

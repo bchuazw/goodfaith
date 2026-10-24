@@ -34,6 +34,7 @@ export const submitReportSchema = z
     reporter: z.object({ handle: handleSchema }),
     payoutEmail: z.email("Enter a valid PayPal email").max(254).optional(),
     demoScenario: z.string().max(32).optional(),
+    demoRound: z.string().regex(/^[a-z0-9-]{4,40}$/).optional(),
   })
   .refine((v) => (v.body ?? v.description ?? "").trim().length >= 20, { message: "Describe the issue in at least 20 characters", path: ["description"] });
 
@@ -94,6 +95,7 @@ export async function submitReport(svc: Services, raw: unknown): Promise<{ repor
     updatedAt: now,
     ...(depositRequired ? {} : { queuedAt: now, triage: { attempt: 1 } }),
     ...(v.demoScenario ? { demoScenario: v.demoScenario } : {}),
+    ...(v.demoRound ? { demoRound: v.demoRound } : {}),
   };
   await svc.db.reports.create(id, report);
   if (!depositRequired) svc.defer(() => runTriage(svc, id));

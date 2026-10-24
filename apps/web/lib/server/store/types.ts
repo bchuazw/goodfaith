@@ -134,6 +134,11 @@ export type ReportRecord = {
   settlement?: SettlementRecord;
   /** The judge-mode (/demo) scenario that created the report, if any. */
   demoScenario?: string;
+  /**
+   * Judge-mode round. Demo reports dedupe only against reports of the same round (and real reports never
+   * against demo ones), so judge mode stays repeatable on a shared deployment.
+   */
+  demoRound?: string;
 };
 
 /**

@@ -14,24 +14,25 @@ export function isHeroKey(key: string): key is HeroKey {
   return Object.hasOwn(HERO_REPORTS, key);
 }
 
-/** The latest judge-mode report per scenario, newest first. */
-export async function latestScenarioReports(svc: Services): Promise<Partial<Record<HeroKey, string>>> {
+/** The latest judge-mode round and its report per scenario. */
+export async function latestScenarioReports(svc: Services): Promise<{ round?: string; reports: Partial<Record<HeroKey, string>> }> {
+  const reports = (await svc.db.reports.list()).filter((r) => r.demoScenario && isHeroKey(r.demoScenario)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const round = reports[0]?.demoRound;
   const out: Partial<Record<HeroKey, string>> = {};
-  const reports = (await svc.db.reports.list()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   for (const r of reports) {
-    if (r.demoScenario && isHeroKey(r.demoScenario) && !out[r.demoScenario]) out[r.demoScenario] = r.id;
+    if (r.demoRound === round && !out[r.demoScenario as HeroKey]) out[r.demoScenario as HeroKey] = r.id;
   }
-  return out;
+  return { ...(round ? { round } : {}), reports: out };
 }
 
-export async function runScenario(svc: Services, key: HeroKey, opts: { origin: string }): Promise<{ reportId: string }> {
+export async function runScenario(svc: Services, key: HeroKey, opts: { origin: string; round: string }): Promise<{ reportId: string }> {
   const hero = HERO_REPORTS[key];
   if (key === "duplicate") {
-    // A duplicate needs an original: the IDOR must already be reproduced.
-    const latest = await latestScenarioReports(svc);
-    const original = latest.idor ? await svc.db.verdicts.value(latest.idor) : undefined;
-    const anyReproduced = original?.verdict === "REPRODUCED" || (await svc.db.verdicts.list()).some((v) => v.verdict === "REPRODUCED" && v.claims.vulnClass?.startsWith("CWE-639"));
-    if (!anyReproduced) throw new AppError("NEEDS_ORIGINAL", "Run the real IDOR first: a duplicate needs a reproduced original to match", 409);
+    // A duplicate needs an original: this round's IDOR must already be reproduced.
+    const inRound = (await svc.db.reports.list()).filter((r) => r.demoRound === opts.round && r.demoScenario === "idor");
+    let reproduced = false;
+    for (const r of inRound) if ((await svc.db.verdicts.value(r.id))?.verdict === "REPRODUCED") reproduced = true;
+    if (!reproduced) throw new AppError("NEEDS_ORIGINAL", "Run the real IDOR first: a duplicate needs a reproduced original to match", 409);
   }
   const mock = isMockPayPal(svc.paypal);
   const { report, depositRequired } = await submitReport(svc, {
@@ -44,6 +45,7 @@ export async function runScenario(svc: Services, key: HeroKey, opts: { origin: s
     ...(hero.poc ? { poc: hero.poc } : {}),
     reporter: { handle: hero.handle },
     demoScenario: key,
+    demoRound: opts.round,
   });
   if (depositRequired) {
     // Live: the payout goes back to the sandbox account that posted the deposit, which is registered,

@@ -43,6 +43,7 @@ const env = (k: string) => process.env[k]?.trim() || undefined;
 const LIVE = Boolean(env("PAYPAL_CLIENT_ID") && env("PAYPAL_CLIENT_SECRET")) && (env("PAYPAL_ENV") ?? "sandbox") === "sandbox";
 const VAULT_ID = env("PAYPAL_SANDBOX_VAULT_ID");
 const ORIGIN = "https://goodfaith.example";
+const LIVE_ROUND = `live-${Date.now().toString(36)}`;
 const note = (label: string, data: unknown) => console.info(`[web-live] ${label}: ${JSON.stringify(data)}`);
 
 function liveServices() {
@@ -101,7 +102,7 @@ describe.skipIf(!LIVE)("web settlement on the PayPal sandbox (live)", () => {
     const live = () => (shared ??= liveServices());
 
     it("IDOR: hold, REPRODUCED, pay = void + one payout that reaches SUCCESS", { timeout: 240_000 }, async () => {
-      const { reportId } = await runScenario(live().svc, "idor", { origin: ORIGIN });
+      const { reportId } = await runScenario(live().svc, "idor", { origin: ORIGIN, round: LIVE_ROUND });
       await live().drain();
       const ctx = await settlementContext(live().svc, reportId);
       note("idor deposit", { orderId: ctx.deposit?.orderId, authorizationId: ctx.deposit?.authorizationId, status: ctx.deposit?.status, source: ctx.deposit?.source });
@@ -122,7 +123,7 @@ describe.skipIf(!LIVE)("web settlement on the PayPal sandbox (live)", () => {
     });
 
     it("SLOP: capture with confirmation captures the hold exactly once", { timeout: 120_000 }, async () => {
-      const { reportId } = await runScenario(live().svc, "slop", { origin: ORIGIN });
+      const { reportId } = await runScenario(live().svc, "slop", { origin: ORIGIN, round: LIVE_ROUND });
       await live().drain();
       expect((await settlementContext(live().svc, reportId)).verdict?.verdict).toBe("SLOP");
       await expect(settle(live().svc, reportId, { action: "capture" })).rejects.toMatchObject({ code: "CONFIRMATION_REQUIRED" });
@@ -135,7 +136,7 @@ describe.skipIf(!LIVE)("web settlement on the PayPal sandbox (live)", () => {
     });
 
     it("DUPLICATE: release voids the hold; capture is refused", { timeout: 120_000 }, async () => {
-      const { reportId } = await runScenario(live().svc, "duplicate", { origin: ORIGIN });
+      const { reportId } = await runScenario(live().svc, "duplicate", { origin: ORIGIN, round: LIVE_ROUND });
       await live().drain();
       const ctx = await settlementContext(live().svc, reportId);
       expect(ctx.verdict?.verdict).toBe("DUPLICATE");
