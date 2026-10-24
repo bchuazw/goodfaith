@@ -29,10 +29,6 @@ export function registerNoteRoutes(app: Hono<AppEnv>, deps: NotesDeps): void {
   });
 
   // Read a single note by id.
-  //
-  // NOTE(1.4.0): this looks the note up by id and returns it to any authenticated user. The owner
-  // check that should gate a private note is missing, so a user can read another user's notes by
-  // guessing or enumerating ids. Fixed in 1.4.1.
   app.get("/api/notes/:id", (c) => {
     const user = requireUser(c);
     if (user instanceof Response) return user;

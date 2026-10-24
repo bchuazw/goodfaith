@@ -46,11 +46,8 @@ export function registerAttachmentRoutes(app: Hono<AppEnv>, deps: AttachmentDeps
     return c.json({ attachment: { id: attachment.id, filename, size: attachment.size } }, 201);
   });
 
-  // Download a previously uploaded file by name.
-  //
-  // FIXED(1.4.1): the requested name is joined onto the upload directory and the resolved path is
-  // rejected unless it is still inside UPLOAD_DIR, so `../secrets.env` and similar names can no
-  // longer escape the upload directory.
+  // Download a previously uploaded file by name. The resolved path must stay inside the upload
+  // directory, so names like `../secrets.env` are rejected.
   app.get("/api/attachments/download", (c) => {
     const user = requireUser(c);
     if (user instanceof Response) return user;

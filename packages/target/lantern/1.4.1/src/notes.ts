@@ -28,10 +28,8 @@ export function registerNoteRoutes(app: Hono<AppEnv>, deps: NotesDeps): void {
     return c.json({ notes: deps.db.listNotesByOwner(user.id).map(noteView) });
   });
 
-  // Read a single note by id.
-  //
-  // FIXED(1.4.1): a note is only returned to its owner (or an administrator). A note that exists but
-  // belongs to someone else is reported as not found, so ids cannot be probed for existence either.
+  // Read a single note by id. Only the owner (or an administrator) may read it; other ids are
+  // reported as not found so note ids cannot be probed for existence.
   app.get("/api/notes/:id", (c) => {
     const user = requireUser(c);
     if (user instanceof Response) return user;

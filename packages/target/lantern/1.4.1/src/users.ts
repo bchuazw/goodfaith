@@ -13,10 +13,7 @@ export function registerUserRoutes(app: Hono<AppEnv>): void {
     return c.json({ user: publicUser(user) });
   });
 
-  // Update the signed-in user's profile.
-  //
-  // FIXED(1.4.1): only the editable profile fields are copied from the request body. Sensitive
-  // fields such as `role`, `id` and `backupCode` can no longer be set through this endpoint.
+  // Update the signed-in user's editable profile fields (display name, bio, email).
   app.patch("/api/users/me", async (c) => {
     const user = requireUser(c);
     if (user instanceof Response) return user;

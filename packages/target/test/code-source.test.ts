@@ -50,6 +50,24 @@ describe("lanternCodeSource", () => {
     expect(await code.findSymbol("not a symbol", "1.4.0")).toEqual([]);
   });
 
+  it("exposes only the requested version's files: a 1.4.0 read never sees 1.4.1's changelog or fixes", async () => {
+    // The CHANGELOG that documents the fixes exists only in 1.4.1; triaging a 1.4.0 claim must not
+    // be able to read it, or it would be handed the answer.
+    expect(await code.readFile("CHANGELOG.md", "1.4.1")).toContain("CWE-639");
+    expect(await code.readFile("CHANGELOG.md", "1.4.0")).toBeUndefined();
+    expect(await code.listFiles("1.4.0")).not.toContain("CHANGELOG.md");
+
+    // 1.4.0 source carries no comment hinting at the bug or the fix.
+    const notes140 = (await code.readFile("src/notes.ts", "1.4.0")) ?? "";
+    expect(notes140).not.toMatch(/CWE|owner check|Fixed in|vulnerab|enumerat/i);
+    // The 1.4.0 read handler has no owner check (the IDOR); the 1.4.1 one does.
+    expect(await code.readFile("src/notes.ts", "1.4.1")).toMatch(/user\.role !== "admin"/);
+
+    // A path that tries to escape the version directory is refused.
+    expect(await code.readFile("../1.4.1/CHANGELOG.md", "1.4.0")).toBeUndefined();
+    expect(await code.readFile("../../1.4.1/src/notes.ts", "1.4.0")).toBeUndefined();
+  });
+
   it("returns nothing for an unknown ref", async () => {
     expect(await code.listFiles("9.9.9")).toEqual([]);
     expect(await code.readFile("src/notes.ts", "9.9.9")).toBeUndefined();

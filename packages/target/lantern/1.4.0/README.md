@@ -23,7 +23,6 @@ attachments, so it runs anywhere with no database to set up.
 ## Versions
 
 - **1.4.0** — current.
-- See the changelog for security fixes.
 
 ## License
 
