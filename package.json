@@ -1,0 +1,26 @@
+{
+  "name": "goodfaith",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Good Faith: open-source bug bounties for the AI-slop era. Refundable PayPal deposits, AI-reproduced reports, instant PayPal payouts.",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.30.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "biome check .",
+    "dev": "pnpm --filter web dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^26.6.4",
+    "@vitest/coverage-v8": "^5.0.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

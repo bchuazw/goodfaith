@@ -1,0 +1,25 @@
+{
+  "name": "@goodfaith/triage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "AI triage for security reports: claim extraction, code-reference checks, duplicate detection, sandboxed PoC replay and a conservative verdict.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@goodfaith/core": "workspace:*",
+    "@goodfaith/llm": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@goodfaith/target": "workspace:*"
+  }
+}

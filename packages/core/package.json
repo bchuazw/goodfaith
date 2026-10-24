@@ -1,0 +1,20 @@
+{
+  "name": "@goodfaith/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Shared Good Faith domain types and zod schemas (reports, proofs of concept, code sources, targets, verdicts).",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
