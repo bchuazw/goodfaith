@@ -135,7 +135,7 @@ export function ReportStatus({ initial, initialEvents, paypalMode }: { initial: 
               </div>
             </CardHeader>
             <CardContent className="pt-2">
-              <TriageTimeline events={events} running={running} failed={view.status === "triage_failed" ? view.triage?.error : undefined} />
+              <TriageTimeline events={events} running={view.status === "queued" || view.status === "triaging"} failed={view.status === "triage_failed" ? view.triage?.error : undefined} />
             </CardContent>
           </Card>
 

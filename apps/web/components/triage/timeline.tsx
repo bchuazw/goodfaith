@@ -103,7 +103,8 @@ export function TriageTimeline({
   compact?: boolean;
   failed?: string;
 }) {
-  const [animate] = useState(running);
+  // Stagger arrivals for a run watched live (or one that has not started yet); show a finished run at once.
+  const [animate] = useState(running || events.length === 0);
   const shown = useStaggered(events.length, animate);
   const visible = useMemo(() => events.slice(0, shown), [events, shown]);
   const model = useMemo(() => buildTimeline(visible), [visible]);

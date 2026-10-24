@@ -186,7 +186,7 @@ function ScenarioRun({ run, bounties, expected, onView }: { run: Run; bounties: 
             Full evidence
           </Link>
         </div>
-        <TriageTimeline events={events} running={running} compact failed={view.status === "triage_failed" ? view.triage?.error : undefined} />
+        <TriageTimeline events={events} running={view.status === "queued" || view.status === "triaging"} compact failed={view.status === "triage_failed" ? view.triage?.error : undefined} />
       </div>
       <div className="space-y-4">
         <div className={cn("space-y-3 rounded-xl p-4 ring-1 ring-foreground/10", triaged && !view.settlement && "ring-2 ring-primary/50")}>
