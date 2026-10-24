@@ -1,0 +1,12 @@
+{
+  "name": "lantern",
+  "version": "1.4.0",
+  "private": true,
+  "description": "A small self-hosted notes app.",
+  "type": "module",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "hono": "^4.6.0"
+  }
+}
