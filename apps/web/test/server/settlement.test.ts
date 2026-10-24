@@ -57,7 +57,7 @@ describe("hero flows end to end (mock PayPal, @goodfaith/triage with the scripte
     const ctx = await settlementContext(env.svc, id);
     expect(ctx.verdict?.verdict).toBe("SLOP");
     expect(ctx.verdict?.findings.some((f) => f.kind === "injection" && f.status === "fail")).toBe(true);
-    expect(ctx.verdict?.findings.some((f) => f.kind === "code_ref" && f.status === "fail" && f.title.includes("lantern_session_rehydrate"))).toBe(true);
+    expect(ctx.verdict?.findings.some((f) => f.kind === "code_ref" && f.status === "fail" && f.title.includes("src/session.ts"))).toBe(true);
     expect(settlementOptions(ctx).capture).toEqual({ allowed: true, needs: "confirm" });
 
     expect((await refusal(settle(env.svc, id, { action: "capture" }))).code).toBe("CONFIRMATION_REQUIRED");

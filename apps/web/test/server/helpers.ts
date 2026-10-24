@@ -2,7 +2,7 @@ import { createLlm } from "@goodfaith/llm";
 import { createMockPayPal, type MockPayPal } from "@goodfaith/paypal";
 import { triageReport } from "@goodfaith/triage";
 import { approveDeposit, createDepositOrder } from "@/lib/server/deposits";
-import { composeReportBody, HERO_REPORTS, type HeroKey } from "@/lib/hero-reports";
+import { HERO_REPORTS, type HeroKey } from "@/lib/hero-reports";
 import { submitReport } from "@/lib/server/reports";
 import { createServices, type Services } from "@/lib/server/services";
 import { createMemoryStore, type Store } from "@/lib/server/store";
@@ -58,8 +58,8 @@ export function heroInput(key: HeroKey, kind: "free" | "bounty" = "bounty") {
     kind,
     title: h.title,
     claimedVersion: h.claimedVersion,
-    claimedSeverity: h.claimedSeverity,
-    body: composeReportBody({ affectedCode: h.affectedCode, description: h.description, impact: h.impact, ...(h.pocNotes ? { pocNotes: h.pocNotes } : {}) }),
+    ...(h.claimedSeverity ? { claimedSeverity: h.claimedSeverity } : {}),
+    body: h.body,
     ...(h.poc ? { poc: h.poc } : {}),
     reporter: { handle: h.handle },
   };
