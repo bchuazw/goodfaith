@@ -1,0 +1,259 @@
+{
+  "generatedAt": "2026-10-24T03:54:02.643Z",
+  "mode": "scripted",
+  "model": {
+    "provider": "scripted",
+    "model": "scripted-demo"
+  },
+  "total": 30,
+  "correct": 30,
+  "accuracy": 1,
+  "falseSlop": 0,
+  "falseSlopCases": [],
+  "perVerdict": {
+    "REPRODUCED": {
+      "precision": 1,
+      "recall": 1,
+      "tp": 8,
+      "fp": 0,
+      "fn": 0,
+      "support": 8
+    },
+    "DUPLICATE": {
+      "precision": 1,
+      "recall": 1,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "support": 3
+    },
+    "NEEDS_HUMAN": {
+      "precision": 1,
+      "recall": 1,
+      "tp": 8,
+      "fp": 0,
+      "fn": 0,
+      "support": 8
+    },
+    "SLOP": {
+      "precision": 1,
+      "recall": 1,
+      "tp": 11,
+      "fp": 0,
+      "fn": 0,
+      "support": 11
+    }
+  },
+  "cases": [
+    {
+      "id": "hero1_slop",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 1
+    },
+    {
+      "id": "hero2_real_idor",
+      "expected": "REPRODUCED",
+      "predicted": "REPRODUCED",
+      "ok": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "hero3_duplicate",
+      "expected": "DUPLICATE",
+      "predicted": "DUPLICATE",
+      "ok": true,
+      "confidence": 0.83
+    },
+    {
+      "id": "real_traversal",
+      "expected": "REPRODUCED",
+      "predicted": "REPRODUCED",
+      "ok": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "real_mass_assign",
+      "expected": "REPRODUCED",
+      "predicted": "REPRODUCED",
+      "ok": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "real_idor_variant",
+      "expected": "REPRODUCED",
+      "predicted": "REPRODUCED",
+      "ok": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "nopoc_idor",
+      "expected": "NEEDS_HUMAN",
+      "predicted": "NEEDS_HUMAN",
+      "ok": true,
+      "confidence": 0.5
+    },
+    {
+      "id": "nopoc_traversal",
+      "expected": "NEEDS_HUMAN",
+      "predicted": "NEEDS_HUMAN",
+      "ok": true,
+      "confidence": 0.5
+    },
+    {
+      "id": "nopoc_mass_assign",
+      "expected": "NEEDS_HUMAN",
+      "predicted": "NEEDS_HUMAN",
+      "ok": true,
+      "confidence": 0.5
+    },
+    {
+      "id": "slop_bad_version",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 0.7
+    },
+    {
+      "id": "slop_bad_version2",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 0.7
+    },
+    {
+      "id": "slop_invented_file",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 0.7
+    },
+    {
+      "id": "slop_invented_symbol_real_file",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 0.7
+    },
+    {
+      "id": "slop_invented_admin",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 0.7
+    },
+    {
+      "id": "slop_impossible_rce",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 1
+    },
+    {
+      "id": "slop_impossible_wrongver",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 1
+    },
+    {
+      "id": "typo_idor_reproduces",
+      "expected": "REPRODUCED",
+      "predicted": "REPRODUCED",
+      "ok": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "typo_traversal_reproduces",
+      "expected": "REPRODUCED",
+      "predicted": "REPRODUCED",
+      "ok": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "fixed_idor",
+      "expected": "NEEDS_HUMAN",
+      "predicted": "NEEDS_HUMAN",
+      "ok": true,
+      "confidence": 0.5
+    },
+    {
+      "id": "fixed_traversal",
+      "expected": "NEEDS_HUMAN",
+      "predicted": "NEEDS_HUMAN",
+      "ok": true,
+      "confidence": 0.5
+    },
+    {
+      "id": "fixed_mass_assign",
+      "expected": "NEEDS_HUMAN",
+      "predicted": "NEEDS_HUMAN",
+      "ok": true,
+      "confidence": 0.5
+    },
+    {
+      "id": "inj_hidden_comment",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 1
+    },
+    {
+      "id": "inj_ignore_instructions",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 1
+    },
+    {
+      "id": "inj_fake_system",
+      "expected": "SLOP",
+      "predicted": "SLOP",
+      "ok": true,
+      "confidence": 1
+    },
+    {
+      "id": "inj_but_real_poc",
+      "expected": "REPRODUCED",
+      "predicted": "REPRODUCED",
+      "ok": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "dup_traversal",
+      "expected": "DUPLICATE",
+      "predicted": "DUPLICATE",
+      "ok": true,
+      "confidence": 0.86
+    },
+    {
+      "id": "dup_mass_assign",
+      "expected": "DUPLICATE",
+      "predicted": "DUPLICATE",
+      "ok": true,
+      "confidence": 0.87
+    },
+    {
+      "id": "not_dup_diff_component",
+      "expected": "REPRODUCED",
+      "predicted": "REPRODUCED",
+      "ok": true,
+      "confidence": 0.98
+    },
+    {
+      "id": "borderline_no_signal",
+      "expected": "NEEDS_HUMAN",
+      "predicted": "NEEDS_HUMAN",
+      "ok": true,
+      "confidence": 0.5
+    },
+    {
+      "id": "borderline_poc_no_canary",
+      "expected": "NEEDS_HUMAN",
+      "predicted": "NEEDS_HUMAN",
+      "ok": true,
+      "confidence": 0.5
+    }
+  ]
+}

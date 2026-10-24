@@ -94,14 +94,21 @@ function extractComponents(body: string): Array<{ path: string; symbol?: string;
     }
   };
 
-  // "symbol() in path" or "symbol in path" — pair a function with the file that holds it.
+  // "symbol() in path" or "symbol in path" — pair a function with the file that holds it. Only treat
+  // the token as a symbol when it actually looks like code: wrapped in backticks, followed by (), or
+  // written as an identifier (camelCase / snake_case). This avoids reading an English noun like
+  // "handler", "traversal" or "handling" in "the download handler in src/x.ts" as a missing symbol —
+  // a false "symbol does not exist", which would be a false slop signal.
   for (const m of body.matchAll(/`?([A-Za-z_$][\w$]*)(?:\(\))?`?[ \t]+(?:in|of|within|inside|at)[ \t]+`?([\w./-]+)`?/g)) {
     // Skip route-parameter words like the `id` in `/api/notes/:id` — they are not code symbols.
     const before = body[(m.index ?? 0) - 1];
     if (before === ":" || before === "/") continue;
     const symbol = m[1] as string;
     const path = (m[2] as string).replace(/[.,;:]+$/, "");
-    if (SOURCE_EXT.test(path)) push({ path, symbol });
+    const raw = m[0] as string;
+    const marked = raw.includes("`") || raw.includes("()");
+    const codeLike = /[A-Z]/.test(symbol) || /[_$0-9]/.test(symbol);
+    if (SOURCE_EXT.test(path) && (marked || (codeLike && symbol.length >= 3))) push({ path, symbol });
   }
 
   // Bare file paths.
