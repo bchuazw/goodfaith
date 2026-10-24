@@ -27,6 +27,17 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // The workspace packages export TypeScript source from src/index.ts, so Next compiles them.
   transpilePackages: ["@goodfaith/core", "@goodfaith/paypal", "@goodfaith/llm", "@goodfaith/triage", "@goodfaith/target"],
+  turbopack: {
+    rules: {
+      // NodeNext-style "./x.js" imports between the packages' .ts files (see the loader for why).
+      "*.ts": {
+        condition: { path: /(^|\/)packages\/[^/]+\/(src|lantern)\// },
+        loaders: [path.join(process.cwd(), "build-tools", "workspace-ts-imports-loader.cjs")],
+      },
+    },
+  },
+  // Lantern's bundled source is read at runtime by the code-reference checks: ship it with the functions.
+  outputFileTracingIncludes: { "/**": ["../../packages/target/lantern/**/*"] },
 };
 
 export default nextConfig;
