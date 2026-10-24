@@ -1,9 +1,6 @@
 import type { JsonSchema, ScriptContext, ScriptedTurn } from "../types.js";
-import { ADVISOR_ALLOW_VERDICT, assessRisk, blockVerdictFor } from "./advisor.js";
-import { evidenceAnalystScript, evidenceSummaryBag } from "./evidence.js";
 import { fitToSchema, normalizeKey } from "./fit.js";
-import { shoppingScript } from "./shopping.js";
-import { draftPermissionSlip, slipBag } from "./slip.js";
+import { assessReport, extractClaimsFromReport, scoreDuplicates } from "./triage.js";
 
 function structuredTurn(label: string, build: (ctx: ScriptContext) => unknown): ScriptedTurn {
   return {
@@ -17,33 +14,23 @@ function structuredTurn(label: string, build: (ctx: ScriptContext) => unknown): 
 const freeze = (turns: ScriptedTurn[]): readonly ScriptedTurn[] => Object.freeze(turns);
 
 /**
- * Named scripts for the scripted provider. Use one with
- * `createLlm({ provider: "scripted", script: scripts.shoppingCompromised })` or `withScript(llm, ...)`.
- * Every structured script fits its canned output to the caller's schema; every shopping script adapts to
- * the tools it is given (see docs/LLM_NOTES.md).
+ * Named scripts for the scripted provider (the zero-key triage demo). Each structured script fits its
+ * deterministic output to whatever schema the caller passes to structured(). See scripts/triage.ts.
  */
 export const scripts = {
-  /** structured(): drafts IntentConstraints from the user's words (deterministic parser). */
-  permissionSlipDraft: freeze([structuredTurn("permission slip draft", (ctx) => slipBag(draftPermissionSlip(ctx.user)))]),
-  /** toolLoop(): search market → list merchants → browse verified merchant → cart 1 bag ≤ $45 → sign → pay → summary. */
-  shoppingHappyPath: freeze(shoppingScript("happy")),
-  /** toolLoop(): follows the injected instructions at the unverified merchant: 5 × Platinum bundle → sign → pay. */
-  shoppingCompromised: freeze(shoppingScript("compromised")),
-  /** toolLoop(): verified merchant, cat food priced above the $45 auto-approve limit (the $52 step-up beat). */
-  shoppingStepUp: freeze(shoppingScript("stepup")),
-  /** structured(): risk advisor says ALLOW (intentMatch 0.97). */
-  advisorAllow: freeze([structuredTurn("advisor allow", () => ADVISOR_ALLOW_VERDICT)]),
-  /** structured(): risk advisor says BLOCK, quoting the injection found in the prompt when there is one. */
-  advisorBlock: freeze([structuredTurn("advisor block", (ctx) => blockVerdictFor(ctx.user))]),
-  /** structured(): heuristic advisor (BLOCK on injection signals, STEP_UP on odd quantities, else ALLOW). Default. */
-  advisorAuto: freeze([structuredTurn("advisor heuristic", (ctx) => assessRisk(ctx.user))]),
-  /** toolLoop(): merchant-console Evidence Analyst. */
-  evidenceAnalyst: freeze(evidenceAnalystScript()),
-  /** structured(): dispute evidence narrative. */
-  evidenceSummary: freeze([structuredTurn("evidence summary", (ctx) => evidenceSummaryBag(ctx.user))]),
+  /** structured(): extract the security claims (components, vuln class, impact, PoC) from a report. */
+  triageClaims: freeze([structuredTurn("triage: extract claims", (ctx) => extractClaimsFromReport(ctx.user))]),
+  /** structured(): score the report for slop and suggest a severity, from the deterministic evidence. */
+  triageAssess: freeze([structuredTurn("triage: assess", (ctx) => assessReport(ctx))]),
+  /** structured(): rate similarity of the report against candidate prior reports. */
+  triageDuplicate: freeze([structuredTurn("triage: duplicates", (ctx) => scoreDuplicates(ctx))]),
   /** structured(): fallback for unknown schemas (type defaults plus a placeholder summary). */
   genericStructured: freeze([
     structuredTurn("generic", () => ({ summary: "Scripted output: no LLM key is configured.", explanation: "Scripted output." })),
+  ]),
+  /** toolLoop(): fallback when no tools are scripted (the triage engine does not use a tool loop). */
+  genericAgent: freeze([
+    { type: "dynamic", op: "toolLoop", label: "generic agent", resolve: () => ({ type: "final", text: "Scripted agent: no tool script is configured for this call." }) },
   ]),
 } as const;
 
@@ -80,18 +67,10 @@ export function defaultScriptFor(i: DefaultScriptInput): { name: ScriptName; tur
   if (i.op === "structured") {
     const n = normalizeKey(i.name ?? "");
     const keys = schemaKeys(i.jsonSchema);
-    if (/advis|risk|verdict|judge|guard/.test(n) || keys.has("injectionsuspected") || (keys.has("recommendation") && keys.has("intentmatch"))) {
-      return { name: "advisorAuto", turns: scripts.advisorAuto };
-    }
-    if (/slip|mandate|constraint|intent|permission/.test(n) || keys.has("maxperorder")) {
-      return { name: "permissionSlipDraft", turns: scripts.permissionSlipDraft };
-    }
-    if (/evidence|dispute/.test(n) || keys.has("evidence")) return { name: "evidenceSummary", turns: scripts.evidenceSummary };
+    if (/assess|slop|severity/.test(n) || keys.has("slopscore")) return { name: "triageAssess", turns: scripts.triageAssess };
+    if (/duplicate|dedupe|dupe/.test(n) || (keys.has("matches") && keys.has("similarity"))) return { name: "triageDuplicate", turns: scripts.triageDuplicate };
+    if (/claim|extract/.test(n) || (keys.has("components") && keys.has("impact"))) return { name: "triageClaims", turns: scripts.triageClaims };
     return { name: "genericStructured", turns: scripts.genericStructured };
   }
-  if (i.toolNames.some((t) => /dispute|evidence/i.test(t))) return { name: "evidenceAnalyst", turns: scripts.evidenceAnalyst };
-  const text = `${i.system}\n${i.user}`;
-  if (/\bcompromised[\s_-]*(?:agent|mode)\b|\[compromised\]/i.test(text)) return { name: "shoppingCompromised", turns: scripts.shoppingCompromised };
-  if (/\[step-?up\]|\bstep-?up (?:demo|scenario|mode)\b/i.test(text)) return { name: "shoppingStepUp", turns: scripts.shoppingStepUp };
-  return { name: "shoppingHappyPath", turns: scripts.shoppingHappyPath };
+  return { name: "genericAgent", turns: scripts.genericAgent };
 }

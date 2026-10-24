@@ -4,16 +4,16 @@
 export { createLlm, DEFAULT_MODELS, defineTool, llmFromEnv, withScript } from "./create.js";
 export { LlmError, type LlmErrorCode, LlmValidationError } from "./errors.js";
 export { toAnthropicSchema, toGeminiSchema, toOpenAIStrictSchema, zodToJsonSchema } from "./json-schema.js";
-export {
-  ADVISOR_ALLOW_VERDICT,
-  ADVISOR_BLOCK_VERDICT,
-  type AdvisorVerdict,
-  assessRisk,
-} from "./scripts/advisor.js";
-export { fitToSchema } from "./scripts/fit.js";
+export { collectValues, fitToSchema, normalizeKey } from "./scripts/fit.js";
 export { defaultScriptFor, type ScriptName, scripts } from "./scripts/index.js";
-export { DEMO_TOOL_NAMES } from "./scripts/shopping.js";
-export { DEMO_INTENT_TEXT, type DraftConstraints, draftPermissionSlip, type PermissionSlipDraft } from "./scripts/slip.js";
+export {
+  type AssessBag,
+  assessReport,
+  type ClaimsBag,
+  type DuplicateBag,
+  extractClaimsFromReport,
+  scoreDuplicates,
+} from "./scripts/triage.js";
 export type {
   JsonSchema,
   Llm,
