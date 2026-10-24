@@ -99,7 +99,17 @@ export async function checkCodeRefs(components: CodeLocation[], ref: string, cod
   const findings: Finding[] = [];
   let hardFailure = false;
   let nearMatchOnly = false;
-  const symbols = components.some((c) => c.symbol && !c.path) ? await definedSymbols(code, ref) : null;
+  // Scanning every definition in the project is only affordable for a small bundled codebase. For a
+  // large/remote source (e.g. curl over the GitHub API) we never scan the whole repo for a symbol.
+  const SMALL_REPO_MAX = 400;
+  let symbols: string[] | null = null;
+  async function symbolPool(): Promise<string[] | null> {
+    if (symbols) return symbols;
+    const files = await code.listFiles(ref);
+    if (files.length > SMALL_REPO_MAX) return null;
+    symbols = await definedSymbols(code, ref);
+    return symbols;
+  }
 
   for (let i = 0; i < components.length; i++) {
     const comp = components[i] as CodeLocation;
@@ -135,7 +145,11 @@ export async function checkCodeRefs(components: CodeLocation[], ref: string, cod
         findings.push(pass("code_ref", `Symbol ${comp.symbol}() exists in ${ref}`, `Defined at ${locs.map((l) => `${l.path}:${l.line ?? "?"}`).join(", ")}.`, { symbol: comp.symbol, locations: locs }));
         continue;
       }
-      const pool = symbols ?? (await definedSymbols(code, ref));
+      const pool = await symbolPool();
+      if (pool === null) {
+        findings.push(inconclusive("code_ref", `Symbol ${comp.symbol}() was cited without a file`, "The report names a function but not a file, and the codebase is too large to scan exhaustively; a human should confirm where it lives.", { symbol: comp.symbol }));
+        continue;
+      }
       if (pool.includes(comp.symbol)) {
         findings.push(pass("code_ref", `Symbol ${comp.symbol} exists in ${ref}`, "Found a matching definition.", { symbol: comp.symbol }));
         continue;
@@ -158,7 +172,11 @@ export async function checkCodeRefs(components: CodeLocation[], ref: string, cod
         continue;
       }
       const files = await code.listFiles(ref);
-      const near = files.find((f) => editDistance(base(f), base(comp.path)) <= 2);
+      // A plausible typo shares the file extension and directory: a .c source is not a typo of a .md
+      // doc, and a missing file whose siblings are unrelated is a genuine fabrication, not a typo.
+      const want = extOf(comp.path);
+      const dir = dirOf(comp.path);
+      const near = files.find((f) => extOf(f) === want && dirOf(f) === dir && editDistance(base(f), base(comp.path)) <= 2);
       if (near) {
         nearMatchOnly = true;
         findings.push(inconclusive("code_ref", `File ${comp.path} not found in ${ref}; did you mean ${near}?`, "The cited file does not exist, but a similarly named file does. Treating as a possible typo.", { path: comp.path, nearMatch: near }));
@@ -175,6 +193,17 @@ export async function checkCodeRefs(components: CodeLocation[], ref: string, cod
 function base(path: string): string {
   const parts = path.split("/");
   return parts[parts.length - 1] ?? path;
+}
+
+function extOf(path: string): string {
+  const b = base(path);
+  const dot = b.lastIndexOf(".");
+  return dot > 0 ? b.slice(dot) : "";
+}
+
+function dirOf(path: string): string {
+  const slash = path.lastIndexOf("/");
+  return slash >= 0 ? path.slice(0, slash) : "";
 }
 
 function finding(kind: Finding["kind"], status: Finding["status"], title: string, detail: string, evidence?: Record<string, unknown>): Finding {

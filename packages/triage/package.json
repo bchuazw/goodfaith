@@ -13,7 +13,8 @@
   "scripts": {
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "eval": "tsx evals/run.ts"
+    "eval": "tsx evals/run.ts",
+    "eval:curl": "tsx evals/curl.ts"
   },
   "dependencies": {
     "@goodfaith/core": "workspace:*",

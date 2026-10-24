@@ -99,16 +99,19 @@ function extractComponents(body: string): Array<{ path: string; symbol?: string;
   // written as an identifier (camelCase / snake_case). This avoids reading an English noun like
   // "handler", "traversal" or "handling" in "the download handler in src/x.ts" as a missing symbol —
   // a false "symbol does not exist", which would be a false slop signal.
-  for (const m of body.matchAll(/`?([A-Za-z_$][\w$]*)(?:\(\))?`?[ \t]+(?:in|of|within|inside|at)[ \t]+`?([\w./-]+)`?/g)) {
+  // The path must be a real source filename (ends in a known extension). This both avoids pairing a
+  // symbol with a non-file word and lets the regex skip past an earlier "<word> in <non-file>" so the
+  // real "<symbol>() in <file>" later in the sentence matches.
+  for (const m of body.matchAll(/`?([A-Za-z_$][\w$]*)(?:\(\))?`?[ \t]+(?:in|of|within|inside|at)[ \t]+`?((?:[\w.-]+\/)*[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs|c|h|cc|cpp|hpp|py|go|rb|rs|java|php))`?/g)) {
     // Skip route-parameter words like the `id` in `/api/notes/:id` — they are not code symbols.
     const before = body[(m.index ?? 0) - 1];
     if (before === ":" || before === "/") continue;
     const symbol = m[1] as string;
-    const path = (m[2] as string).replace(/[.,;:]+$/, "");
+    const path = m[2] as string;
     const raw = m[0] as string;
     const marked = raw.includes("`") || raw.includes("()");
     const codeLike = /[A-Z]/.test(symbol) || /[_$0-9]/.test(symbol);
-    if (SOURCE_EXT.test(path) && (marked || (codeLike && symbol.length >= 3))) push({ path, symbol });
+    if (marked || (codeLike && symbol.length >= 3)) push({ path, symbol });
   }
 
   // Bare file paths.

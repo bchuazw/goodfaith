@@ -15,13 +15,43 @@ export interface GithubCodeSourceOptions {
   token?: string;
   cacheDir?: string;
   fetch?: typeof fetch;
+  /** Per-request timeout in ms (default 30000). A hung connection fails rather than blocking. */
+  timeoutMs?: number;
+  /** Retries on network errors / timeouts / 5xx (default 2). */
+  maxRetries?: number;
 }
 
 const API = "https://api.github.com";
 
 export function githubCodeSource(opts: GithubCodeSourceOptions): CodeSource {
-  const doFetch = opts.fetch ?? fetch;
+  const baseFetch = opts.fetch ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? 30_000;
+  const maxRetries = opts.maxRetries ?? 2;
   const cacheDir = opts.cacheDir ?? ".cache/github";
+
+  // A fetch with a per-request timeout and retries on network errors / timeouts / 5xx, so a hung
+  // GitHub connection fails fast instead of blocking the whole run forever.
+  const doFetch: typeof fetch = async (input, init) => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await baseFetch(input, { ...init, signal: controller.signal });
+        if (res.status >= 500 && res.status < 600 && attempt < maxRetries) {
+          lastError = new Error(`GitHub API ${res.status}`);
+          continue;
+        }
+        return res;
+      } catch (e) {
+        lastError = e;
+        if (attempt >= maxRetries) throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("GitHub request failed");
+  };
   const slug = `${opts.owner}/${opts.repo}`;
   const refCache = new Map<string, string | undefined>();
   const treeCache = new Map<string, string[]>();
@@ -93,7 +123,9 @@ async function cached(apiPath: string, headers: Record<string, string>, kind: "j
     // not cached yet
   }
   const res = await doFetch(`${API}${apiPath}`, { headers });
-  if (res.status === 404) {
+  // 404 (missing) and 422 (unprocessable ref, e.g. a tag spelling GitHub cannot resolve) both mean
+  // "not found here" — cache and move on, so resolveVersion can try the next candidate spelling.
+  if (res.status === 404 || res.status === 422) {
     await persist(file, "\0__404__");
     return undefined;
   }
