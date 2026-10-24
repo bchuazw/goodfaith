@@ -1,11 +1,11 @@
 import { createLlm } from "@goodfaith/llm";
 import { createMockPayPal, type MockPayPal } from "@goodfaith/paypal";
+import { triageReport } from "@goodfaith/triage";
 import { approveDeposit, createDepositOrder } from "@/lib/server/deposits";
 import { composeReportBody, HERO_REPORTS, type HeroKey } from "@/lib/server/hero-reports";
 import { submitReport } from "@/lib/server/reports";
 import { createServices, type Services } from "@/lib/server/services";
 import { createMemoryStore, type Store } from "@/lib/server/store";
-import { createFixtureTriage } from "@/lib/server/temporary-triage-adapter";
 import { handleWebhook } from "@/lib/server/webhooks";
 
 export const ORIGIN = "http://localhost:3000";
@@ -31,7 +31,7 @@ export function testEnv(opts: { store?: Store; paypal?: MockPayPal; webhooks?: b
     store,
     paypal,
     llm: createLlm({ provider: "scripted" }),
-    triage: createFixtureTriage({ pace: 0 }),
+    triage: { kind: "triage", run: triageReport },
     defer: (task) => {
       pending.push(task);
     },

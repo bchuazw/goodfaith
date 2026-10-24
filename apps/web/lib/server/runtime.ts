@@ -5,11 +5,11 @@
  */
 import "server-only";
 import { isMockPayPal } from "@goodfaith/paypal";
+import { triageReport } from "@goodfaith/triage";
 import { after } from "next/server";
 import { appModeFromEnv, llmForMode, paypalForMode } from "./mode";
 import { createServices, type Services } from "./services";
 import { storeFromEnv } from "./store";
-import { createFixtureTriage } from "./temporary-triage-adapter";
 import { handleWebhook } from "./webhooks";
 
 const KEY = Symbol.for("goodfaith.web.services");
@@ -43,7 +43,7 @@ function build(env: Record<string, string | undefined>): Services {
     store: storeFromEnv(env, app),
     paypal,
     llm,
-    triage: createFixtureTriage(),
+    triage: { kind: "triage", run: triageReport },
     config: {
       ...(env.GOODFAITH_PUBLIC_URL?.trim() ? { publicUrl: env.GOODFAITH_PUBLIC_URL.trim().replace(/\/+$/, "") } : {}),
       ...(listFromEnv(env.PAYPAL_CLIENT_TOKEN_DOMAINS) ? { clientTokenDomains: listFromEnv(env.PAYPAL_CLIENT_TOKEN_DOMAINS) as string[] } : {}),

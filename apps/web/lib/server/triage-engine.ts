@@ -14,7 +14,7 @@ export type TriageFn = (
 ) => Promise<TriageVerdict>;
 
 export type TriageEngine = {
-  /** "triage": @goodfaith/triage. "fixture": the temporary adapter (shown as MOCK in the UI). */
+  /** "triage": @goodfaith/triage. Tests may wrap it ("fixture") to count or fail runs. */
   kind: "triage" | "fixture";
   run: TriageFn;
 };

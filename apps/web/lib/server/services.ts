@@ -86,7 +86,7 @@ export function createServices(opts: {
   const mocks: string[] = [];
   if (paypalMode === "mock") mocks.push("PayPal: in-memory mock with a simulated approval sheet");
   if (opts.llm.provider === "scripted") mocks.push("LLM: scripted, deterministic heuristics");
-  if (opts.triage.kind === "fixture") mocks.push("Triage: temporary fixture adapter (until @goodfaith/triage lands)");
+  if (opts.triage.kind === "fixture") mocks.push("Triage: a test fixture engine");
   return {
     mode: { app: opts.app, paypal: paypalMode, llm: { provider: opts.llm.provider, model: opts.llm.model }, triage: opts.triage.kind, store: opts.store.kind, mocks },
     db: openDb(opts.store),

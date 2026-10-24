@@ -17,7 +17,7 @@ describe("triage service", () => {
     expect(stages.at(-1)).toBe("verdict:done");
     expect(events.some((e) => e.event.type === "replay_step" && e.event.step.status === 200)).toBe(true);
     expect(events.at(-1)?.event.type).toBe("verdict");
-    expect((await env.svc.db.reports.value(id))?.triage).toMatchObject({ attempt: 1, engine: "fixture", finishedAt: expect.any(String) });
+    expect((await env.svc.db.reports.value(id))?.triage).toMatchObject({ attempt: 1, engine: "triage", finishedAt: expect.any(String) });
   });
 
   it("runs once per attempt even when two instances try to start it", async () => {
@@ -67,15 +67,27 @@ describe("triage service", () => {
 
   it("trusted researchers claim bounties without a deposit", async () => {
     const env = testEnv();
-    // trustAfterVerified is 3: three paid, reproduced reports from the same handle.
     const { settle } = await import("@/lib/server/settlement");
-    for (let i = 0; i < env.svc.program.trustAfterVerified; i++) {
-      const id = await triagedClaim(env, "idor");
-      await settle(env.svc, id, { action: "pay" });
+    const { approveDeposit, createDepositOrder } = await import("@/lib/server/deposits");
+    // trustAfterVerified is 3: three distinct, reproduced and paid Lantern 1.4.0 bugs from one handle.
+    const bugs = [
+      { title: "IDOR on GET /api/notes/:id leaks private notes", body: "GET /api/notes/:id in `src/notes.ts` has no owner check (CWE-639 IDOR).", steps: [{ method: "GET" as const, path: "/api/notes/note_2", as: "alice" }] },
+      { title: "Path traversal in attachment download reads secrets.env", body: "GET /api/attachments/download in `src/attachments.ts` joins the file name without normalising it: path traversal (CWE-22).", steps: [{ method: "GET" as const, path: "/api/attachments/download?file=../secrets.env", as: "alice" }] },
+      { title: "Mass assignment of role on PATCH /api/users/me grants admin", body: "PATCH /api/users/me in `src/users.ts` copies the whole body onto the user, including role (CWE-915 mass assignment).", steps: [{ method: "PATCH" as const, path: "/api/users/me", body: JSON.stringify({ role: "admin" }), as: "alice" }, { method: "GET" as const, path: "/api/admin/users", as: "alice" }] },
+    ];
+    for (const bug of bugs) {
+      const { report } = await submitReport(env.svc, { kind: "bounty", title: bug.title, body: bug.body, claimedVersion: "1.4.0", claimedSeverity: "high", poc: { steps: bug.steps }, reporter: { handle: "steady_hand" } });
+      const { deposit } = await createDepositOrder(env.svc, report.id, { origin: "http://localhost:3000" });
+      env.paypal.simulateBuyerApproval(deposit.orderId, { email: "steady@example.com" });
+      await approveDeposit(env.svc, report.id, { orderId: deposit.orderId });
+      await env.drain();
+      expect((await env.svc.db.verdicts.value(report.id))?.verdict).toBe("REPRODUCED");
+      await settle(env.svc, report.id, { action: "pay" });
     }
-    const { report, depositRequired } = await submitReport(env.svc, heroInput("idor"));
+    const { report, depositRequired } = await submitReport(env.svc, { kind: "bounty", title: "A fourth finding from a trusted researcher", body: "Details follow in the PoC section of this report.", reporter: { handle: "@Steady_Hand" } });
     expect(depositRequired).toBe(false);
     expect(report.input.reporter.trusted).toBe(true);
     expect(report.status).toBe("queued");
   });
+
 });

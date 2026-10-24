@@ -19,7 +19,7 @@ const refusal = async (p: Promise<unknown>) => {
   return e as AppError;
 };
 
-describe("hero flows end to end (mock PayPal, fixture triage, real Lantern runner)", () => {
+describe("hero flows end to end (mock PayPal, @goodfaith/triage with the scripted LLM, real Lantern runner)", () => {
   it("REPRODUCED IDOR: pay voids the deposit, then pays the bounty once with senderBatchId gf-<id>", async () => {
     const env = testEnv();
     const id = await triagedClaim(env, "idor");
