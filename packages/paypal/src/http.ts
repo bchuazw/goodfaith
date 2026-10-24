@@ -136,6 +136,35 @@ export class PayPalHttp {
   }
 
   private async fetchToken(): Promise<CachedToken> {
+    const data = await this.oauthGrant("grant_type=client_credentials");
+    const lifetimeMs = data.expires_in * 1000;
+    // Refresh early: 5 minutes, or 10% of the lifetime for short-lived tokens.
+    const skewMs = Math.min(5 * 60_000, lifetimeMs / 10);
+    const token: CachedToken = {
+      token: data.access_token,
+      expiresAt: this.now() + lifetimeMs - skewMs,
+      scopes: (data.scope ?? "").split(/\s+/).filter(Boolean),
+      ...(data.app_id ? { appId: data.app_id } : {}),
+    };
+    this.cached = token;
+    return token;
+  }
+
+  /**
+   * A browser-safe client token for the JS SDK v6 (`paypal.createInstance({ clientToken })`): the same
+   * client-credentials grant with `response_type=client_token`, optionally bound to `domains` (sent as
+   * one comma-separated `domains[]` field, as PayPal documents it). It is minted fresh on every call and
+   * never touches the cached server access token, which must not reach a browser.
+   */
+  async clientToken(opts: { domains?: string[] } = {}): Promise<{ token: string; expiresIn: number }> {
+    const form = new URLSearchParams({ grant_type: "client_credentials", response_type: "client_token" });
+    if (opts.domains?.length) form.set("domains[]", opts.domains.join(","));
+    const data = await this.oauthGrant(form.toString());
+    return { token: data.access_token, expiresIn: data.expires_in };
+  }
+
+  /** POST /v1/oauth2/token with Basic auth: bounded retries, PayPalError mapping, secret-free logs. */
+  private async oauthGrant(body: string): Promise<z.infer<typeof tokenResponseSchema>> {
     const path = "/v1/oauth2/token";
     const maxRetries = this.cfg.maxRetries ?? 2;
     for (let attempt = 0; ; attempt++) {
@@ -149,7 +178,7 @@ export class PayPalHttp {
             "Content-Type": "application/x-www-form-urlencoded",
             Accept: "application/json",
           },
-          body: "grant_type=client_credentials",
+          body,
           signal: AbortSignal.timeout(this.cfg.timeoutMs ?? 30_000),
         });
       } catch (e) {
@@ -175,17 +204,7 @@ export class PayPalHttp {
       if (!parsed.success) {
         throw new PayPalError({ status: res.status, name: LOCAL_ERROR.unexpectedResponse, message: "OAuth token response was not understood", method: "POST", path });
       }
-      const lifetimeMs = parsed.data.expires_in * 1000;
-      // Refresh early: 5 minutes, or 10% of the lifetime for short-lived tokens.
-      const skewMs = Math.min(5 * 60_000, lifetimeMs / 10);
-      const token: CachedToken = {
-        token: parsed.data.access_token,
-        expiresAt: this.now() + lifetimeMs - skewMs,
-        scopes: (parsed.data.scope ?? "").split(/\s+/).filter(Boolean),
-        ...(parsed.data.app_id ? { appId: parsed.data.app_id } : {}),
-      };
-      this.cached = token;
-      return token;
+      return parsed.data;
     }
   }
 

@@ -43,6 +43,7 @@ const paypal = paypalFromEnv(); // real sandbox client if PAYPAL_CLIENT_ID/SECRE
 - `createSandboxDispute({ ..., strategy, buyerEmail, buyerTransactionId })`.
 - `searchTransactions({ start, end, transactionId })`. Results add `invoiceId`, `eventCode`, `statusCode`, `fee`.
 - Real client only: `tokenInfo()` returns the granted OAuth scopes, which shows the enabled features. `onLog` gets one secret-free line per HTTP attempt, useful for an on-screen "PayPal calls" trace.
+- `createClientToken({ domains? })` (added 2026-10-24 for the web app's JS SDK v6 button): `POST /v1/oauth2/token` with `grant_type=client_credentials&response_type=client_token`, returning `{ clientToken, expiresIn }` for `paypal.createInstance({ clientToken, components: ["paypal-payments"] })`. It is minted per call and never touches the cached server token. **Verified live on 2026-10-24:** an 810-character JWT with `expires_in: 900`. `domains[]` takes bare hostnames only: `example.com` works, while `https://example.com`, `localhost` and `localhost:3000` get `401 invalid_domain`, so the client rejects those before calling. The mock returns a `MOCK-CLIENT-TOKEN.…` placeholder that the real SDK would refuse.
 
 **Errors.** Every client-method failure is a `PayPalError`. `paypalFromEnv` configuration problems throw a plain `Error`, and the mock's `simulate*` helpers throw `MOCK_SIMULATION_ERROR`.
 - Fields: `status`, `name`, `debugId` (alias `debug_id`), `details[]`, `issue` (the first detail), `informationLink`, `method`, `path`, `retryable`, `is(code)` and `toJSON()`.

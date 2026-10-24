@@ -46,6 +46,8 @@ import {
   payoutRequestId,
 } from "./requests.js";
 import type {
+  ClientToken,
+  CreateClientTokenOptions,
   CreatePayoutInput,
   CreateSandboxDisputeInput,
   DisputeSummary,
@@ -93,7 +95,19 @@ export type RealPayPalClient = PayPalClient & {
   createPayout(i: CreatePayoutInput): Promise<PayoutBatch>;
   getPayoutBatch(batchId: string, opts?: { page?: number; pageSize?: number }): Promise<PayoutBatch>;
   getPayoutItem(itemId: string): Promise<PayoutItem>;
+  createClientToken(opts?: CreateClientTokenOptions): Promise<ClientToken>;
 };
+
+/**
+ * Hostnames for `domains[]`. Verified on the sandbox (2026-10-24): "example.com" works, while a scheme,
+ * a port or a dotless name ("https://example.com", "localhost:3000", "localhost") gets 401 invalid_domain.
+ * PayPal joins the list with commas, so a domain may not contain one.
+ */
+const clientTokenDomainSchema = z
+  .string()
+  .trim()
+  .max(253)
+  .regex(/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*$/, "domains must be bare hostnames such as example.com (no scheme, port, path, comma or space)");
 
 const configSchema = z.object({
   clientId: z.string().trim().min(1, "clientId is required"),
@@ -134,6 +148,17 @@ export function createPayPalClient(cfg: PayPalClientConfig): RealPayPalClient {
     env,
 
     tokenInfo: () => http.tokenInfo(),
+
+    async createClientToken(opts) {
+      const domains: string[] = [];
+      for (const d of opts?.domains ?? []) {
+        const checked = clientTokenDomainSchema.safeParse(d);
+        if (!checked.success) throw validationError(`createClientToken: ${checked.error.issues[0]?.message ?? "invalid domain"}`);
+        domains.push(checked.data);
+      }
+      const t = await http.clientToken(domains.length ? { domains } : {});
+      return { clientToken: t.token, expiresIn: t.expiresIn };
+    },
 
     async createVaultSetupToken(i) {
       const body = buildSetupTokenRequest(i, defaults);

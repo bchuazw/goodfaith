@@ -60,6 +60,8 @@ import {
   parseSandboxDisputeInput,
 } from "./requests.js";
 import type {
+  ClientToken,
+  CreateClientTokenOptions,
   CreatePayoutInput,
   CreateSandboxDisputeInput,
   DisputeSummary,
@@ -139,6 +141,8 @@ export interface MockPayPal extends PayPalClient {
   createPayout(i: CreatePayoutInput): Promise<PayoutBatch>;
   getPayoutBatch(batchId: string, opts?: { page?: number; pageSize?: number }): Promise<PayoutBatch>;
   getPayoutItem(itemId: string): Promise<PayoutItem>;
+  /** A placeholder JS SDK v6 client token. PayPal's real SDK rejects it: mock mode uses the fake approval sheet instead. */
+  createClientToken(opts?: CreateClientTokenOptions): Promise<ClientToken>;
   _state(): MockSnapshot;
   /** The buyer approves a setup token (saves PayPal) or an order (pays) on the PayPal sheet. */
   simulateBuyerApproval(orderOrSetupTokenId: string, buyer?: { email?: string; givenName?: string; surname?: string }): BuyerApprovalResult;
@@ -1391,6 +1395,17 @@ export function createMockPayPal(opts: MockPayPalOptions = {}): MockPayPal {
         const batch = payoutBatches.get(item.batchId);
         if (batch) processPayoutBatch(batch);
         return mapPayoutItem(payoutItemJson(item));
+      }),
+
+    createClientToken: (copts) =>
+      api("createClientToken", () => {
+        for (const d of copts?.domains ?? []) {
+          const host = d.trim();
+          if (host.length > 253 || !/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z0-9-]*[A-Za-z][A-Za-z0-9-]*$/.test(host)) {
+            throw new PayPalError({ status: 0, name: LOCAL_ERROR.validation, message: "createClientToken: domains must be bare hostnames such as example.com (no scheme, port, path, comma or space)" });
+          }
+        }
+        return { clientToken: `MOCK-CLIENT-TOKEN.${uuid(rng)}`, expiresIn: 900 };
       }),
 
     // ---------------------------------------------------------------- simulation helpers

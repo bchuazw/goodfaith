@@ -387,6 +387,24 @@ export type WebhookDelivery = {
 };
 
 // ---------------------------------------------------------------------------------------------
+// JS SDK v6 (browser)
+// ---------------------------------------------------------------------------------------------
+
+/** Extension: options for a browser-safe JS SDK v6 client token. */
+export type CreateClientTokenOptions = {
+  /** Origins' hostnames the token may be used on (PayPal's `domains[]`), e.g. ["goodfaith.example"]. */
+  domains?: string[];
+};
+
+/** Extension: what `paypal.createInstance({ clientToken })` needs in the browser. */
+export type ClientToken = {
+  /** Browser-safe and short-lived; it cannot call the REST APIs that move money. */
+  clientToken: string;
+  /** Lifetime in seconds, as PayPal reports it. */
+  expiresIn: number;
+};
+
+// ---------------------------------------------------------------------------------------------
 // The contract
 // ---------------------------------------------------------------------------------------------
 
@@ -417,4 +435,6 @@ export interface PayPalClient {
   getPayoutBatch?(batchId: string, opts?: { page?: number; pageSize?: number }): Promise<PayoutBatch>;
   /** Extension: one item's status (GET /v1/payments/payouts-item/{id}). */
   getPayoutItem?(itemId: string): Promise<PayoutItem>;
+  /** Extension: a browser-safe client token for the JS SDK v6 (POST /v1/oauth2/token, response_type=client_token). */
+  createClientToken?(opts?: CreateClientTokenOptions): Promise<ClientToken>;
 }
