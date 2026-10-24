@@ -68,7 +68,9 @@ Open-source maintainers are drowning in AI-generated vulnerability reports that 
 **Recording:**
 - Playwright drives the real app at 1440×900, with clean seeded data and fixed demo accounts.
 - Every PayPal id on screen is real and matches the sandbox dashboard.
-- Voice: TBD (text-to-speech or captions only); decide by Nov 4.
+- Voice: decide by Nov 1.
+  - This machine only has legacy SAPI voices (David, Zira, Mark), which are too robotic.
+  - Options: Gemini TTS with a free AI Studio key (natural, $0; the key also gives the hosted demo a fallback LLM that never expires), the user's own voice, or captions only.
 - Music: none, or a CC0 track.
 
 ## 4. Devpost text (draft v1)
