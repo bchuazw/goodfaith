@@ -96,52 +96,54 @@ describe.skipIf(!LIVE)("web settlement on the PayPal sandbox (live)", () => {
   });
 
   describe.skipIf(!VAULT_ID)("judge-mode flows on the saved sandbox wallet (no browser)", () => {
-    const { svc, drain } = liveServices();
+    // Built lazily: describe bodies run at collection time, even when the suite is skipped.
+    let shared: ReturnType<typeof liveServices> | undefined;
+    const live = () => (shared ??= liveServices());
 
     it("IDOR: hold, REPRODUCED, pay = void + one payout that reaches SUCCESS", { timeout: 240_000 }, async () => {
-      const { reportId } = await runScenario(svc, "idor", { origin: ORIGIN });
-      await drain();
-      const ctx = await settlementContext(svc, reportId);
+      const { reportId } = await runScenario(live().svc, "idor", { origin: ORIGIN });
+      await live().drain();
+      const ctx = await settlementContext(live().svc, reportId);
       note("idor deposit", { orderId: ctx.deposit?.orderId, authorizationId: ctx.deposit?.authorizationId, status: ctx.deposit?.status, source: ctx.deposit?.source });
       expect(ctx.deposit).toMatchObject({ status: "AUTHORIZED", source: "vault" });
       expect(ctx.verdict?.verdict).toBe("REPRODUCED");
 
-      const paid = await settle(svc, reportId, { action: "pay" });
+      const paid = await settle(live().svc, reportId, { action: "pay" });
       note("idor pay", { deposit: paid.deposit?.status, batchId: paid.payout?.batchId, senderBatchId: paid.payout?.senderBatchId, status: paid.payout?.status });
       expect(paid.deposit?.status).toBe("VOIDED");
       expect(paid.payout?.senderBatchId).toBe(`gf-${reportId}`);
       // A second pay replays nothing at PayPal.
-      await settle(svc, reportId, { action: "pay" });
-      await pollPayout(svc, reportId, { budgetMs: 180_000 });
-      const final = await svc.db.payouts.value(reportId);
+      await settle(live().svc, reportId, { action: "pay" });
+      await pollPayout(live().svc, reportId, { budgetMs: 180_000 });
+      const final = await live().svc.db.payouts.value(reportId);
       note("idor payout", { status: final?.status, batchStatus: final?.batchStatus, itemId: final?.itemId, transactionId: final?.transactionId, fee: final?.fee });
       expect(["SUCCESS", "UNCLAIMED"]).toContain(final?.status);
-      expect((await svc.paypal.getOrder(ctx.deposit?.orderId as string)).authorizationStatus).toBe("VOIDED");
+      expect((await live().svc.paypal.getOrder(ctx.deposit?.orderId as string)).authorizationStatus).toBe("VOIDED");
     });
 
     it("SLOP: capture with confirmation captures the hold exactly once", { timeout: 120_000 }, async () => {
-      const { reportId } = await runScenario(svc, "slop", { origin: ORIGIN });
-      await drain();
-      expect((await settlementContext(svc, reportId)).verdict?.verdict).toBe("SLOP");
-      await expect(settle(svc, reportId, { action: "capture" })).rejects.toMatchObject({ code: "CONFIRMATION_REQUIRED" });
-      const done = await settle(svc, reportId, { action: "capture", confirm: true });
+      const { reportId } = await runScenario(live().svc, "slop", { origin: ORIGIN });
+      await live().drain();
+      expect((await settlementContext(live().svc, reportId)).verdict?.verdict).toBe("SLOP");
+      await expect(settle(live().svc, reportId, { action: "capture" })).rejects.toMatchObject({ code: "CONFIRMATION_REQUIRED" });
+      const done = await settle(live().svc, reportId, { action: "capture", confirm: true });
       note("slop capture", { captureId: done.deposit?.captureId, status: done.deposit?.status, captureStatus: done.deposit?.captureStatus });
       expect(done.deposit?.status).toBe("CAPTURED");
-      await settle(svc, reportId, { action: "capture", confirm: true });
-      const order = await svc.paypal.getOrder(done.deposit?.orderId as string);
+      await settle(live().svc, reportId, { action: "capture", confirm: true });
+      const order = await live().svc.paypal.getOrder(done.deposit?.orderId as string);
       expect(order.authorizationStatus).toBe("CAPTURED");
     });
 
     it("DUPLICATE: release voids the hold; capture is refused", { timeout: 120_000 }, async () => {
-      const { reportId } = await runScenario(svc, "duplicate", { origin: ORIGIN });
-      await drain();
-      const ctx = await settlementContext(svc, reportId);
+      const { reportId } = await runScenario(live().svc, "duplicate", { origin: ORIGIN });
+      await live().drain();
+      const ctx = await settlementContext(live().svc, reportId);
       expect(ctx.verdict?.verdict).toBe("DUPLICATE");
-      await expect(settle(svc, reportId, { action: "capture", confirm: true })).rejects.toMatchObject({ code: "ACTION_NOT_ALLOWED" });
-      const done = await settle(svc, reportId, { action: "release" });
+      await expect(settle(live().svc, reportId, { action: "capture", confirm: true })).rejects.toMatchObject({ code: "ACTION_NOT_ALLOWED" });
+      const done = await settle(live().svc, reportId, { action: "release" });
       note("duplicate release", { authorizationId: done.deposit?.authorizationId, status: done.deposit?.status });
       expect(done.deposit?.status).toBe("VOIDED");
-      const trail = await svc.db.ledger.read(reportId);
+      const trail = await live().svc.db.ledger.read(reportId);
       expect(trail.map((l) => l.op)).toEqual(["orders.create", "authorizations.void"]);
     });
   });
