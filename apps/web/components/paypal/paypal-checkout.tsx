@@ -196,9 +196,9 @@ function MockCheckout({ createOrder, onApproved, onCancelled, onFailed, canStart
             <DialogDescription>A mock PayPal sheet. No real PayPal account or money is involved.</DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2 border-b bg-warning-soft px-4 py-2 text-xs font-medium text-warning-strong">
-            <FlaskConicalIcon className="size-3.5" aria-hidden /> MOCK: simulated PayPal window
+            <FlaskConicalIcon className="size-3.5" aria-hidden /> MOCK: a simulated PayPal window. No PayPal account or money is involved.
           </div>
-          {sheet && <iframe title="Simulated PayPal approval" src={sheet.url} className="h-[30rem] w-full bg-background" />}
+          {sheet && <iframe title="Simulated PayPal approval" src={sheet.url} className="h-[min(35rem,78dvh)] w-full bg-background" />}
         </DialogContent>
       </Dialog>
     </div>

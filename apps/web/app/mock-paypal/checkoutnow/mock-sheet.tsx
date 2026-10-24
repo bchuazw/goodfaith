@@ -40,11 +40,13 @@ export function MockSheet({ order, token, embed }: { order?: SheetOrder; token?:
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <div className="flex items-center justify-center gap-2 bg-warning-soft px-4 py-2 text-center text-xs font-medium text-warning-strong">
-        <FlaskConicalIcon className="size-3.5 shrink-0" aria-hidden />
-        MOCK: a simulated PayPal approval. No PayPal account and no money are involved.
-      </div>
-      <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-5 py-8">
+      {!embed && (
+        <div className="flex items-center justify-center gap-2 bg-warning-soft px-4 py-2 text-center text-xs font-medium text-warning-strong">
+          <FlaskConicalIcon className="size-3.5 shrink-0" aria-hidden />
+          MOCK: a simulated PayPal approval. No PayPal account and no money are involved.
+        </div>
+      )}
+      <div className={embed ? "mx-auto flex w-full max-w-sm flex-col gap-5 px-5 py-5" : "mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-5 py-8"}>
         <div className="space-y-1 text-center">
           <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">Good Faith requests</p>
           {order?.amount ? (

@@ -12,6 +12,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { api, errorMessage } from "@/lib/client/api";
+import { formatDateTime } from "@/lib/format";
 import { formatMoney, type Money as MoneyValue } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { ActionOption, ReportView, SettlementAction } from "@/lib/view-types";
@@ -393,7 +394,7 @@ function SettledSummary({ view }: { view: ReportView }) {
       </p>
       <p className="text-xs text-muted-foreground">
         by {s.actor}
-        {s.completedAt && <> · {new Date(s.completedAt).toLocaleString()}</>}
+        {s.completedAt && <> · {formatDateTime(s.completedAt)}</>}
         {s.severity && <> · {s.severity} severity</>}
       </p>
       {s.overrideReason && <p className="text-xs">Override: {s.overrideReason}</p>}
