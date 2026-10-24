@@ -96,6 +96,9 @@ function extractComponents(body: string): Array<{ path: string; symbol?: string;
 
   // "symbol() in path" or "symbol in path" — pair a function with the file that holds it.
   for (const m of body.matchAll(/`?([A-Za-z_$][\w$]*)(?:\(\))?`?[ \t]+(?:in|of|within|inside|at)[ \t]+`?([\w./-]+)`?/g)) {
+    // Skip route-parameter words like the `id` in `/api/notes/:id` — they are not code symbols.
+    const before = body[(m.index ?? 0) - 1];
+    if (before === ":" || before === "/") continue;
     const symbol = m[1] as string;
     const path = (m[2] as string).replace(/[.,;:]+$/, "");
     if (SOURCE_EXT.test(path)) push({ path, symbol });
@@ -201,12 +204,13 @@ export function assessReport(ctx: Pick<ScriptContext, "user">): AssessBag {
     score = 0.02;
     reasons.push("The PoC reproduced against the sandbox, so the report is not slop.");
   } else {
-    if (ev.has("version_exists") && !truthy(ev.get("version_exists"))) {
-      score += 0.5;
+    // Any single hard fabrication signal is enough to cross the slop threshold; a soft signal is not.
+    if (truthy(ev.get("claimed_version_invalid"))) {
+      score += 0.6;
       reasons.push("The claimed version does not exist in the project.");
     }
     if (truthy(ev.get("hard_code_ref_failure"))) {
-      score += 0.5;
+      score += 0.6;
       reasons.push("The primary cited code does not exist at the claimed version and has no near match.");
     }
     if (injectionSuspected) {
@@ -281,7 +285,9 @@ export function scoreDuplicates(ctx: Pick<ScriptContext, "user">): DuplicateBag 
     const classMatch = cweKey(newFields.class) !== "" && cweKey(newFields.class) === cweKey(cand.class);
     const compMatch = norm(newFields.component) !== "" && norm(newFields.component) === norm(cand.component);
     const textSim = jaccard(newText, tokens(`${cand.title} ${cand.summary}`));
-    const similarity = Math.round((0.34 * (classMatch ? 1 : 0) + 0.34 * (compMatch ? 1 : 0) + 0.32 * textSim) * 100) / 100;
+    // Same class AND component alone reaches the DUPLICATE gate (0.8); text overlap only adds. A bug
+    // of a different class or component tops out at 0.6 and can never be auto-deduped.
+    const similarity = Math.round((0.4 * (classMatch ? 1 : 0) + 0.4 * (compMatch ? 1 : 0) + 0.2 * textSim) * 100) / 100;
     matches.push({ priorId, similarity });
   }
   matches.sort((a, b) => b.similarity - a.similarity);
