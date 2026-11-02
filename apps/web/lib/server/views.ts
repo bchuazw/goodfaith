@@ -189,6 +189,7 @@ export async function queueRows(svc: Services): Promise<QueueRow[]> {
         kind: r.kind,
         status: r.status,
         ...(v ? { verdict: v.verdict, confidence: v.confidence } : {}),
+        ...(v?.model.mode === "degraded" ? { aiUnavailable: true } : {}),
         ...(v?.suggestedSeverity ? { severity: v.suggestedSeverity.level } : {}),
         ...(r.input.claimedSeverity ? { claimedSeverity: r.input.claimedSeverity } : {}),
         submittedAt: r.input.submittedAt,

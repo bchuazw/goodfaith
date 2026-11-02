@@ -7,6 +7,7 @@ import { VERDICT_META } from "@/components/status";
 import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { StreamTriageEvent } from "@/lib/view-types";
+import { aiLabel, DegradedNotice } from "./ai-status";
 import { FindingRow } from "./finding-row";
 import { ReplayStepRow } from "./replay-step";
 
@@ -210,9 +211,10 @@ export function VerdictStamp({ verdict, compact }: { verdict: TriageVerdict; com
         {verdict.suggestedSeverity && <span className="text-xs text-muted-foreground">suggested severity <strong className="font-medium text-foreground capitalize">{verdict.suggestedSeverity.level}</strong></span>}
       </div>
       {!compact && <p className="max-w-prose text-sm leading-relaxed">{verdict.summary}</p>}
+      <DegradedNotice verdict={verdict} className="max-w-prose" />
       <p className="flex items-center gap-1.5 text-[0.72rem] text-muted-foreground">
         <BotIcon className="size-3.5" aria-hidden />
-        {verdict.model.mode === "scripted" ? "Scripted triage (mock mode)" : "Claude"}: <span className="font-mono">{verdict.model.model}</span>
+        {aiLabel(verdict.model)}: <span className="font-mono">{verdict.model.model}</span>
         <span aria-hidden>·</span> the AI recommends; only a maintainer moves money.
       </p>
     </div>

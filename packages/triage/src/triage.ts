@@ -16,8 +16,9 @@ import type {
   TriageVerdict,
 } from "@goodfaith/core";
 import { httpPocStepSchema } from "@goodfaith/core";
-import type { Llm } from "@goodfaith/llm";
+import { createLlm, type Llm, LlmError, type StructuredInput } from "@goodfaith/llm";
 import type { CodeSource, TargetRunner } from "@goodfaith/core";
+import { affectedCodeComponents } from "./affected-code.js";
 import { checkCodeRefs, type CodeRefResult, primaryComponentKey } from "./code-refs.js";
 import { detectTriageInjection } from "./injection.js";
 import { decideVerdict, type PolicyDuplicate } from "./policy.js";
@@ -99,22 +100,52 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
     findings.push(f);
     emit({ type: "finding", finding: f, at: at() });
   };
+  /** The deterministic checks that ran, in plain English (shown when the AI was unavailable). */
+  const checks: string[] = [];
+
+  // Every LLM judgment goes through judge(). The first LLM failure (an error, a timeout, the AI budget
+  // running out) switches the rest of the run to deterministic stand-ins: degraded mode. A model that is
+  // down then costs one call's time, not one per stage, and the run still finishes on the facts.
+  let degraded: { stage: TriageStage; reason: string } | undefined;
+  const standIn = createLlm({ provider: "scripted" });
+  async function judge<T>(where: TriageStage, input: StructuredInput<T>, lastResort: T): Promise<{ value: T; byAi: boolean }> {
+    if (!degraded) {
+      try {
+        return { value: await deps.llm.structured({ ...input, ...llmOpts }), byAi: true };
+      } catch (e) {
+        checkAborted();
+        degraded = { stage: where, reason: describeLlmFailure(e) };
+        addFinding(
+          mk(
+            "consistency",
+            "inconclusive",
+            "AI unavailable: deterministic checks only",
+            `${degraded.reason}. Triage continued without the AI: the version, the cited code, a prompt-injection scan, duplicates by class and component, and a replay of the structured PoC. Without the AI's assessment the verdict cannot be SLOP; a maintainer decides.`,
+            { stage: where, reason: degraded.reason },
+          ),
+        );
+      }
+    }
+    try {
+      return { value: await standIn.structured(input), byAi: false };
+    } catch {
+      return { value: lastResort, byAi: false };
+    }
+  }
+  const aiNote = (s: TriageStage) => (degraded?.stage === s ? "AI unavailable; continuing with deterministic checks" : undefined);
 
   // --- 1. claims --------------------------------------------------------------------------------
   checkAborted();
   stage("claims", "start");
-  let claimsOut: ClaimsOutput;
-  try {
-    claimsOut = await deps.llm.structured({ system: CLAIMS_SYSTEM, user: claimsUser(report), schema: claimsSchema, name: "triage_claims", ...llmOpts });
-  } catch {
-    checkAborted();
-    claimsOut = { components: [], impact: "", preconditions: [] };
-  }
+  const claimsRes = await judge("claims", { system: CLAIMS_SYSTEM, user: claimsUser(report), schema: claimsSchema, name: "triage_claims" }, EMPTY_CLAIMS);
+  const claimsOut: ClaimsOutput = claimsRes.value;
+  // Without the AI, the form's "Affected code" field is the most reliable citation, so it leads.
+  const fromForm = claimsRes.byAi ? [] : affectedCodeComponents(report.body);
   const version = (report.claimedVersion ?? claimsOut.version)?.trim() || undefined;
   const vulnClass = claimsOut.vulnClass;
-  const components = dedupeComponents(claimsOut.components);
+  const components = dedupeComponents([...fromForm, ...claimsOut.components]);
   const severityClaim = report.claimedSeverity ?? claimsOut.severityClaim;
-  stage("claims", "done", vulnClass ? `${vulnClass}${version ? ` in ${version}` : ""}` : "claims extracted");
+  stage("claims", "done", aiNote("claims") ?? (vulnClass ? `${vulnClass}${version ? ` in ${version}` : ""}` : "claims extracted"));
 
   // --- 2. version -------------------------------------------------------------------------------
   checkAborted();
@@ -123,6 +154,7 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
   const versionProvided = Boolean(version);
   const versionResolves = Boolean(resolvedRef);
   const versionInScope = versionResolves;
+  checks.push(!versionProvided ? "Version: none given" : versionResolves ? `Version: ${version} exists and is in scope` : `Version: ${version} does not exist`);
   if (!versionProvided) {
     addFinding(mk("version", "inconclusive", "No version was specified", "The report does not name a version, so scope and code references cannot be checked against one."));
   } else if (versionResolves) {
@@ -148,6 +180,14 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
   for (const f of codeRefs.findings) {
     if (f.status === "fail") slopSignals.push(f.title);
   }
+  const formNote = fromForm.length > 0 ? ` (${fromForm.length} from the Affected code field)` : "";
+  checks.push(
+    components.length === 0
+      ? "Cited code: nothing specific was cited"
+      : resolvedRef
+        ? `Cited code: ${components.length} reference(s)${formNote} checked at ${resolvedRef}, ${codeRefs.findings.filter((f) => f.status === "pass").length} found`
+        : `Cited code: ${components.length} reference(s)${formNote}, not checkable without a valid version`,
+  );
 
   // Injection detection is deterministic and part of the integrity checks.
   const injectionSignals = detectTriageInjection(report.body);
@@ -157,6 +197,7 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
     addFinding(mk("injection", "fail", "The report contains an instruction aimed at the AI triager", `Found ${injectionSignals.length} prompt-injection signal(s). This is a hard slop signal and never counts in the reporter's favour.`, { signals: injectionSignals }));
     slopSignals.push(`Contains an instruction aimed at the AI triager: "${quote}".`);
   }
+  checks.push(injectionDetected ? `Prompt-injection scan: ${injectionSignals.length} instruction(s) aimed at the triager` : "Prompt-injection scan: none found");
   stage("code_refs", "done");
 
   // --- 4. duplicates ----------------------------------------------------------------------------
@@ -167,20 +208,17 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
   let duplicate: PolicyDuplicate | undefined;
   let duplicateOf: string | undefined;
   if (candidates.length > 0) {
-    let matches: Array<{ priorId: string; similarity: number }> = [];
-    try {
-      const out = await deps.llm.structured({
+    const dupRes = await judge(
+      "duplicates",
+      {
         system: DUPLICATE_SYSTEM,
         user: duplicateUser({ vulnClass, component: primaryComp, title: report.title, summary: claimsOut.impact }, candidates),
         schema: duplicateSchema,
         name: "triage_duplicate",
-        ...llmOpts,
-      });
-      matches = out.matches;
-    } catch {
-      checkAborted();
-      matches = [];
-    }
+      },
+      { matches: [] },
+    );
+    const matches = dupRes.value.matches;
     const scored = candidates
       .map((c) => ({
         prior: c,
@@ -204,12 +242,18 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
       );
     }
   }
-  stage("duplicates", "done");
+  checks.push(
+    candidates.length === 0
+      ? "Duplicates: no earlier accepted reports to compare with"
+      : `Duplicates: compared with ${candidates.length} earlier accepted report(s) by class and component${duplicateOf ? `; duplicate of ${duplicateOf}` : ""}`,
+  );
+  stage("duplicates", "done", aiNote("duplicates"));
 
   // --- 5. replay --------------------------------------------------------------------------------
   checkAborted();
   stage("replay", "start");
-  const poc = toStrictPoc(report.poc ?? toCorePoc(claimsOut.poc));
+  // A PoC parsed from free text needs the AI; without it only the form's structured PoC is replayed.
+  const poc = toStrictPoc(report.poc ?? (claimsRes.byAi ? toCorePoc(claimsOut.poc) : undefined));
   let replay: ReplayResult | undefined;
   let canaryHit = false;
   if (duplicateOf) {
@@ -219,7 +263,11 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
   } else if (!resolvedRef) {
     addFinding(mk("poc", "inconclusive", "No resolvable version to replay against", "The PoC was not replayed because the version could not be resolved."));
   } else if (!poc) {
-    addFinding(mk("poc", "inconclusive", "No runnable PoC", "The report contains no HTTP proof of concept to replay."));
+    addFinding(
+      claimsRes.byAi || !claimsOut.poc
+        ? mk("poc", "inconclusive", "No runnable PoC", "The report contains no HTTP proof of concept to replay.")
+        : mk("poc", "inconclusive", "Free-text PoC not replayed (AI unavailable)", "The report describes its PoC in prose. Turning prose into requests needs the AI, which was unavailable; a structured PoC from the form would have been replayed."),
+    );
   } else {
     replay = await deps.target.replay(poc, resolvedRef, opts.signal ? { signal: opts.signal } : undefined);
     checkAborted();
@@ -234,6 +282,15 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
       addFinding(mk("poc", "fail", "The PoC did not reproduce", "No seeded canary leaked when the PoC ran against the sandbox at this version.", { steps: replay.steps.length }));
     }
   }
+  checks.push(
+    replay
+      ? `Replay: ${report.poc ? "the structured PoC" : "the PoC"} ran in the sandbox (${replay.steps.length} step(s)) and ${canaryHit ? "leaked a seeded canary: reproduced" : replay.error ? `could not complete (${replay.error})` : "did not reproduce"}`
+      : duplicateOf
+        ? "Replay: skipped (duplicate)"
+        : poc
+          ? "Replay: not run (no sandbox or no valid version)"
+          : "Replay: no structured PoC to run",
+  );
   stage("replay", "done");
 
   // --- 6. assessment ----------------------------------------------------------------------------
@@ -252,17 +309,27 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
     vulnClass,
     claimedSeverity: severityClaim,
   };
-  let assessment: AssessmentOutput;
-  try {
-    assessment = await deps.llm.structured({ system: ASSESS_SYSTEM, user: assessUser(report, claimsOut, ev), schema: assessmentSchema, name: "triage_assessment", ...llmOpts });
-  } catch {
-    checkAborted();
-    const fallbackScore = canaryHit ? 0.02 : ev.claimedVersionInvalid || ev.hardCodeRefFailure || injectionDetected ? 0.85 : 0.2;
-    assessment = { slopScore: fallbackScore, slopReasons: [], injectionSuspected: injectionDetected };
-  }
+  const lastResortScore = canaryHit ? 0.02 : ev.claimedVersionInvalid || ev.hardCodeRefFailure || injectionDetected ? 0.85 : 0.2;
+  const assessRes = await judge(
+    "assess",
+    { system: ASSESS_SYSTEM, user: assessUser(report, claimsOut, ev), schema: assessmentSchema, name: "triage_assessment" },
+    { slopScore: lastResortScore, slopReasons: [], injectionSuspected: injectionDetected },
+  );
+  const assessment: AssessmentOutput = assessRes.value;
+  const aiUnavailable = degraded !== undefined;
   if (impossibleImpact) slopSignals.push("The claimed impact (code execution / takeover) is inconsistent with the cited code.");
-  addFinding(mk("severity", canaryHit ? "pass" : "inconclusive", `Slop assessment ${assessment.slopScore.toFixed(2)}`, assessment.slopReasons.join(" ") || "Assessment complete.", { slopScore: assessment.slopScore }));
-  stage("assess", "done");
+  addFinding(
+    aiUnavailable
+      ? mk(
+          "severity",
+          canaryHit ? "pass" : "inconclusive",
+          `Heuristic slop score ${assessment.slopScore.toFixed(2)} (AI unavailable)`,
+          `${assessment.slopReasons.join(" ") || "Scored by rule."} Without the AI's own assessment this score cannot make the report SLOP.`,
+          { slopScore: assessment.slopScore, heuristic: true },
+        )
+      : mk("severity", canaryHit ? "pass" : "inconclusive", `Slop assessment ${assessment.slopScore.toFixed(2)}`, assessment.slopReasons.join(" ") || "Assessment complete.", { slopScore: assessment.slopScore }),
+  );
+  stage("assess", "done", aiNote("assess"));
 
   // --- 7. verdict -------------------------------------------------------------------------------
   checkAborted();
@@ -275,9 +342,10 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
     injectionDetected,
     slopScore: assessment.slopScore,
     duplicate,
+    aiUnavailable,
   });
 
-  const suggestedSeverity = buildSeverity(assessment, decision.verdict);
+  const suggestedSeverity = buildSeverity(assessment, decision.verdict, aiUnavailable);
   const claims: ExtractedClaims = {
     ...(version ? { version } : {}),
     ...(vulnClass ? { vulnClass } : {}),
@@ -292,15 +360,20 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
     reportId: report.id,
     verdict: decision.verdict,
     confidence: decision.confidence,
-    summary: maintainerSummary(decision.verdict, decision.reasons, { version, suggestedSeverity, duplicateOf, canaryHit, replay }),
-    researcherSummary: researcherSummary(decision.verdict, { suggestedSeverity, duplicateOf }),
+    summary: `${degraded ? `AI unavailable (${degraded.reason}), so only the deterministic checks ran. ` : ""}${maintainerSummary(decision.verdict, decision.reasons, { version, suggestedSeverity, duplicateOf, canaryHit, replay })}`,
+    researcherSummary: researcherSummary(decision.verdict, { suggestedSeverity, duplicateOf, aiUnavailable }),
     findings,
     claims,
     ...(suggestedSeverity ? { suggestedSeverity } : {}),
     ...(duplicateOf ? { duplicateOf } : {}),
     slopSignals,
     ...(replay ? { replay } : {}),
-    model: { provider: deps.llm.provider, model: deps.llm.model, mode: deps.llm.provider === "scripted" ? "scripted" : "live" },
+    model: {
+      provider: deps.llm.provider,
+      model: deps.llm.model,
+      mode: degraded ? "degraded" : deps.llm.provider === "scripted" ? "scripted" : "live",
+      ...(degraded ? { degraded: { stage: degraded.stage, reason: degraded.reason, checks } } : {}),
+    },
     startedAt,
     finishedAt: at(),
   };
@@ -310,6 +383,33 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
 }
 
 // --- helpers ------------------------------------------------------------------------------------
+
+const EMPTY_CLAIMS: ClaimsOutput = { components: [], impact: "", preconditions: [] };
+
+/** Why the LLM dropped out, in one line safe to show anyone (LlmError messages are already redacted). */
+export function describeLlmFailure(e: unknown): string {
+  if (!(e instanceof LlmError)) return `The AI failed: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}`;
+  const who = e.model ? `${e.provider} ${e.model}` : e.provider;
+  switch (e.code) {
+    case "timeout":
+      return `${who} did not answer in time`;
+    case "aborted":
+      return `${who} was cancelled${/budget/.test(e.message) ? ": the AI time budget was used up" : ""}`;
+    case "http": {
+      const s = e.status ?? 0;
+      const why = s === 401 || s === 403 ? "authentication failed" : s === 429 ? "rate limited" : s === 503 || s === 529 ? "overloaded" : s >= 500 ? "server error" : "request rejected";
+      return `${who} returned HTTP ${s} (${why})`;
+    }
+    case "network":
+      return `${who} could not be reached`;
+    case "refusal":
+      return `${who} declined the request`;
+    case "validation":
+      return `${who} returned output that did not match the expected format`;
+    default:
+      return `${who} failed: ${e.message.slice(0, 160)}`;
+  }
+}
 
 function mk(kind: Finding["kind"], status: Finding["status"], title: string, detail: string, evidence?: Record<string, unknown>): Finding {
   return { kind, status, title, detail, ...(evidence ? { evidence } : {}) };
@@ -362,12 +462,13 @@ function computeImpossibleImpact(body: string, vulnClass: string | undefined, ca
   return claimsExec && !execClass;
 }
 
-function buildSeverity(assessment: AssessmentOutput, verdict: TriageVerdict["verdict"]): TriageVerdict["suggestedSeverity"] | undefined {
+function buildSeverity(assessment: AssessmentOutput, verdict: TriageVerdict["verdict"], heuristic: boolean): TriageVerdict["suggestedSeverity"] | undefined {
   if (!assessment.severity) return undefined;
   // Only surface a severity suggestion when it is meaningful (reproduced or a human review).
   if (verdict === "SLOP") return undefined;
   const level = assessment.severity.level as Severity;
-  return { level, ...(assessment.severity.cvss ? { cvss: assessment.severity.cvss } : {}), rationale: assessment.severity.rationale };
+  const rationale = heuristic ? `Provisional, by rule (AI unavailable): ${assessment.severity.rationale}` : assessment.severity.rationale;
+  return { level, ...(assessment.severity.cvss ? { cvss: assessment.severity.cvss } : {}), rationale };
 }
 
 function maintainerSummary(
@@ -391,7 +492,13 @@ function maintainerSummary(
   }
 }
 
-function researcherSummary(verdict: TriageVerdict["verdict"], ctx: { suggestedSeverity?: TriageVerdict["suggestedSeverity"]; duplicateOf?: string }): string {
+function researcherSummary(verdict: TriageVerdict["verdict"], ctx: { suggestedSeverity?: TriageVerdict["suggestedSeverity"]; duplicateOf?: string; aiUnavailable?: boolean }): string {
+  if (ctx.aiUnavailable && verdict === "NEEDS_HUMAN") {
+    return "Thanks for the report. Our AI reviewer was unavailable, so only the automatic checks ran (version, cited code, duplicates and a sandbox replay of any structured PoC). A maintainer will review it by hand; your deposit is not affected while they do.";
+  }
+  if (ctx.aiUnavailable && verdict === "REPRODUCED") {
+    return `Good news: your PoC reproduced against a sandboxed instance. Our AI reviewer was unavailable, so the severity${ctx.suggestedSeverity ? ` (${ctx.suggestedSeverity.level})` : ""} is provisional. A maintainer will review and release the bounty.`;
+  }
   switch (verdict) {
     case "REPRODUCED":
       return `Good news: we reproduced your report against a sandboxed instance${ctx.suggestedSeverity ? ` (suggested severity ${ctx.suggestedSeverity.level})` : ""}. A maintainer will review and release the bounty.`;

@@ -8,6 +8,7 @@ import { EvidenceTabs } from "@/components/console/evidence";
 import { IdChip } from "@/components/id-chip";
 import { DepositCard, PayoutCard } from "@/components/report/money-cards";
 import { ReportStatusBadge, SeverityLabel, VERDICT_META, VerdictBadge } from "@/components/status";
+import { DegradedNotice, recommendationHeading } from "@/components/triage/ai-status";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useReportStream } from "@/lib/client/use-report-stream";
 import { formatDateTime, formatDuration } from "@/lib/format";
@@ -61,12 +62,13 @@ export function ConsoleReport({ initial, initialEvents, bounties }: { initial: R
               <CardHeader className="gap-2">
                 <CardTitle className="flex flex-wrap items-center gap-3 text-base">
                   <meta.icon className="size-5" aria-hidden />
-                  Claude&apos;s recommendation: {meta.label}
+                  {recommendationHeading(v.model)}: {meta.label}
                   <span className="font-mono text-xs font-normal text-muted-foreground tabular">confidence {(v.confidence * 100).toFixed(0)}%</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="max-w-prose text-sm leading-relaxed">{v.summary}</p>
+                <DegradedNotice verdict={v} />
                 <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                   <div>
                     <dt className="text-xs text-muted-foreground">Suggested severity</dt>

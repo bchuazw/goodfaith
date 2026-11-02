@@ -2,7 +2,7 @@
 
 import { AllCommunityModule, type ColDef, type ICellRendererParams, ModuleRegistry, type RowClickedEvent, themeQuartz } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
-import { SearchIcon } from "lucide-react";
+import { SearchIcon, TriangleAlertIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -93,7 +93,18 @@ export function QueueGrid({ initial }: { initial: QueueRow[] }) {
         field: "verdict",
         flex: 1,
         minWidth: 136,
-        cellRenderer: (p: ICellRendererParams<QueueRow>) => cell(<VerdictBadge verdict={p.data?.verdict} pending={p.data?.status === "queued" || p.data?.status === "triaging"} />),
+        cellRenderer: (p: ICellRendererParams<QueueRow>) =>
+          cell(
+            <span className="inline-flex items-center gap-1.5">
+              <VerdictBadge verdict={p.data?.verdict} pending={p.data?.status === "queued" || p.data?.status === "triaging"} />
+              {p.data?.aiUnavailable && (
+                <span title="The AI was unavailable: automatic checks only" className="inline-flex items-center text-warning-strong">
+                  <TriangleAlertIcon className="size-3.5" aria-hidden />
+                  <span className="sr-only">AI unavailable</span>
+                </span>
+              )}
+            </span>,
+          ),
       },
       {
         headerName: "Severity",

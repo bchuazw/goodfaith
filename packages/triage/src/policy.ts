@@ -27,6 +27,11 @@ export interface PolicyInput {
   injectionDetected: boolean;
   /** The LLM's slop assessment, 0..1. */
   slopScore: number;
+  /**
+   * The LLM was unavailable (degraded mode), so `slopScore` is a heuristic stand-in. SLOP needs the LLM's
+   * own assessment, so it cannot be reached; REPRODUCED (a fact) and DUPLICATE still can.
+   */
+  aiUnavailable?: boolean;
   duplicate?: PolicyDuplicate;
 }
 
@@ -72,7 +77,7 @@ export function decideVerdict(input: PolicyInput): PolicyResult {
   if (claimedVersionInvalid) hardEvidence.push("the claimed version does not exist in the project");
   if (input.hardCodeRefFailure) hardEvidence.push("the primary cited code does not exist at that version and has no near match");
   if (input.injectionDetected) hardEvidence.push("the report contains an instruction aimed at the AI triager");
-  if (hardEvidence.length > 0 && slopScore >= SLOP_THRESHOLD) {
+  if (hardEvidence.length > 0 && slopScore >= SLOP_THRESHOLD && !input.aiUnavailable) {
     return {
       verdict: "SLOP",
       confidence: slopScore,
@@ -82,7 +87,8 @@ export function decideVerdict(input: PolicyInput): PolicyResult {
 
   // 4. NEEDS_HUMAN — everything else. A typo (near match) or an unreproduced-but-honest report lands here.
   const reasons: string[] = [];
-  if (hardEvidence.length > 0) reasons.push(`Possible fabrication signals (${hardEvidence.join("; ")}), but the slop assessment (${slopScore.toFixed(2)}) is below the threshold, so a human should decide.`);
+  if (hardEvidence.length > 0 && input.aiUnavailable) reasons.push(`Possible fabrication signals (${hardEvidence.join("; ")}), but the AI assessment was unavailable and SLOP needs it, so a human should decide.`);
+  else if (hardEvidence.length > 0) reasons.push(`Possible fabrication signals (${hardEvidence.join("; ")}), but the slop assessment (${slopScore.toFixed(2)}) is below the threshold, so a human should decide.`);
   else if (dup && dup.similarity >= DUPLICATE_SIMILARITY) reasons.push(`Resembles ${dup.ofId}, but not enough to auto-dedupe; a human should compare them.`);
   else reasons.push("The claim could not be reproduced and shows no hard fabrication evidence; a human should review it.");
   return { verdict: "NEEDS_HUMAN", confidence: 0.5, reasons };

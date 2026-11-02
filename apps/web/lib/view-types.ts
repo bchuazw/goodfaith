@@ -119,6 +119,8 @@ export type QueueRow = {
   status: ReportStatus;
   verdict?: TriageVerdict["verdict"];
   confidence?: number;
+  /** The verdict came from the deterministic checks alone: the AI was unavailable. */
+  aiUnavailable?: boolean;
   severity?: Severity;
   claimedSeverity?: Severity;
   submittedAt: string;

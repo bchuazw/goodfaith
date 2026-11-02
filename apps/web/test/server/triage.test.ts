@@ -168,3 +168,20 @@ describe("triage time limits (a hosted function has 300 s)", () => {
     expect(DEFAULT_CONFIG.triageStaleMs).toBeGreaterThan(DEFAULT_CONFIG.triageTimeoutMs);
   });
 });
+
+describe("degraded mode in the web app", () => {
+  it("with the AI down, a slop claim is triaged NEEDS_HUMAN on the deterministic checks and its deposit cannot be captured", async () => {
+    const { settle } = await import("@/lib/server/settlement");
+    const { queueRows } = await import("@/lib/server/views");
+    const { llm } = hangingGemini(30);
+    const env = testEnv({ llm });
+    const id = await triagedClaim(env, "slop");
+    expect(await env.svc.db.reports.value(id)).toMatchObject({ status: "triaged" });
+    const v = await env.svc.db.verdicts.value(id);
+    expect(v).toMatchObject({ verdict: "NEEDS_HUMAN", model: { mode: "degraded", degraded: { stage: "claims", reason: expect.stringContaining("did not answer in time") } } });
+    expect(v?.model.degraded?.checks.length).toBeGreaterThanOrEqual(5);
+    expect((await queueRows(env.svc)).find((r) => r.id === id)).toMatchObject({ verdict: "NEEDS_HUMAN", aiUnavailable: true });
+    await expect(settle(env.svc, id, { action: "capture", confirm: true })).rejects.toMatchObject({ code: "ACTION_NOT_ALLOWED" });
+  });
+});
+

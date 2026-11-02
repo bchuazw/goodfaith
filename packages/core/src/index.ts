@@ -125,12 +125,26 @@ export type TriageVerdict = {
   duplicateOf?: string;
   slopSignals: string[];
   replay?: ReplayResult;
-  model: { provider: string; model: string; mode: "live" | "scripted" };
+  model: TriageModel;
   startedAt: string;
   finishedAt: string;
 };
 
-export type TriageStage = "claims" | "version" | "code_refs" | "duplicates" | "replay" | "assess" | "verdict";
+/**
+ * Who made the LLM judgments. live: a real model (provider/model is the one that answered). scripted: the
+ * zero-key heuristics (mock mode). degraded: the model failed or timed out, so the rest of the run used
+ * deterministic stand-ins; such a verdict is never SLOP.
+ */
+export type TriageModel = {
+  provider: string;
+  model: string;
+  mode: "live" | "scripted" | "degraded";
+  /** degraded only: where the AI dropped out, why, and the deterministic checks that ran (plain English). */
+  degraded?: { stage: TriageStage; reason: string; checks: string[] };
+};
+
+export const TRIAGE_STAGES = ["claims", "version", "code_refs", "duplicates", "replay", "assess", "verdict"] as const;
+export type TriageStage = (typeof TRIAGE_STAGES)[number];
 
 export type TriageEvent =
   | { type: "stage"; stage: TriageStage; status: "start" | "done"; note?: string; at: string }
@@ -184,7 +198,12 @@ export const triageVerdictSchema = z.object({
   duplicateOf: z.string().optional(),
   slopSignals: z.array(z.string()),
   replay: replayResultSchema.optional(),
-  model: z.object({ provider: z.string(), model: z.string(), mode: z.enum(["live", "scripted"]) }),
+  model: z.object({
+    provider: z.string(),
+    model: z.string(),
+    mode: z.enum(["live", "scripted", "degraded"]),
+    degraded: z.object({ stage: z.enum(TRIAGE_STAGES), reason: z.string(), checks: z.array(z.string()) }).optional(),
+  }),
   startedAt: z.string(),
   finishedAt: z.string(),
 }) satisfies z.ZodType<TriageVerdict>;

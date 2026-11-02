@@ -123,12 +123,22 @@ export type TriageVerdict = {
   duplicateOf?: string;
   slopSignals: string[];
   replay?: ReplayResult;
-  model: { provider: string; model: string; mode: "live" | "scripted" };
+  model: TriageModel;
   startedAt: string;
   finishedAt: string;
 };
 
-export type TriageStage = "claims" | "version" | "code_refs" | "duplicates" | "replay" | "assess" | "verdict";
+/** live: a real model made the judgments (provider/model = the one that answered). scripted: zero-key
+ *  heuristics. degraded: the model failed or timed out mid-run, and deterministic stand-ins finished it. */
+export type TriageModel = {
+  provider: string;
+  model: string;
+  mode: "live" | "scripted" | "degraded";
+  degraded?: { stage: TriageStage; reason: string; checks: string[] };   // where the AI dropped out, why, which checks ran
+};
+
+export const TRIAGE_STAGES = ["claims", "version", "code_refs", "duplicates", "replay", "assess", "verdict"] as const;
+export type TriageStage = (typeof TRIAGE_STAGES)[number];
 export type TriageEvent =
   | { type: "stage"; stage: TriageStage; status: "start" | "done"; note?: string; at: string }
   | { type: "finding"; finding: Finding; at: string }
@@ -186,10 +196,15 @@ export function githubCodeSource(opts: { owner: string; repo: string; token?: st
    - the primary cited symbol or file does not exist at that version, and no near match exists (an edit distance ≤ 2 is treated as a typo and goes to NEEDS_HUMAN);
    - an instruction aimed at the AI triager inside the report.
 
-   It also needs the LLM's slop assessment ≥ 0.7. LLM opinion alone is never enough.
+   It also needs the LLM's slop assessment ≥ 0.7. LLM opinion alone is never enough, and a heuristic stand-in for it never counts: in degraded mode (`aiUnavailable`) SLOP is impossible.
 4. **NEEDS_HUMAN:** everything else.
 
 SLOP and DUPLICATE are recommendations. Money moves only on a maintainer's action.
+
+**Degraded mode.** The first LLM failure in a run (an error, a timeout, a refusal, the LLM budget running out) switches the rest of the run to deterministic stand-ins, the scripted provider's heuristics, so a model that is down costs one call's time. Triage still finishes:
+- version check; cited code from the form's "Affected code" section (`affectedCodeComponents`) first, then regex extraction from the body; the prompt-injection scan; duplicates by class and component; and replay of the **structured** PoC only (a PoC written in prose needs the AI).
+- A canary hit is still REPRODUCED and a class-and-component duplicate still DUPLICATE; anything that would have been SLOP is NEEDS_HUMAN.
+- The verdict says so: `model.mode: "degraded"` with `model.degraded = { stage, reason, checks }`, a finding "AI unavailable: deterministic checks only", a summary that starts "AI unavailable (…)", and a researcher summary that says a maintainer will review. The web UI shows a notice with the reason and the checks that ran, and flags the row in the console queue.
 
 **Cancellation and time limits.** `signal` reaches every LLM call (`structured({ ..., signal })`) and the replay; an abort makes `triageReport` reject (an `AbortError`) and nothing is decided. `llmBudgetMs` caps the wall-clock time of all LLM calls in a run: a call still running when it is used up is cancelled, and triage finishes without waiting for the model. The web app uses 45 s per LLM attempt with one retry (`LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`), a 150 s LLM budget and a 200 s hard limit, after which the run is `triage_failed` and can be re-run.
 
