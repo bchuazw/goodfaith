@@ -16,7 +16,7 @@ import type {
   TriageVerdict,
 } from "@goodfaith/core";
 import { httpPocStepSchema } from "@goodfaith/core";
-import { createLlm, type Llm, LlmError, type StructuredInput } from "@goodfaith/llm";
+import { createLlm, type Llm, LlmError, LlmFallbackError, type StructuredInput } from "@goodfaith/llm";
 import type { CodeSource, TargetRunner } from "@goodfaith/core";
 import { affectedCodeComponents } from "./affected-code.js";
 import { checkCodeRefs, type CodeRefResult, primaryComponentKey } from "./code-refs.js";
@@ -107,11 +107,14 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
   // running out) switches the rest of the run to deterministic stand-ins: degraded mode. A model that is
   // down then costs one call's time, not one per stage, and the run still finishes on the facts.
   let degraded: { stage: TriageStage; reason: string } | undefined;
+  /** The model that actually answered (with a fallback chain, not always deps.llm's primary). */
+  let answeredBy: { provider: string; model: string } | undefined;
   const standIn = createLlm({ provider: "scripted" });
   async function judge<T>(where: TriageStage, input: StructuredInput<T>, lastResort: T): Promise<{ value: T; byAi: boolean }> {
     if (!degraded) {
       try {
-        return { value: await deps.llm.structured({ ...input, ...llmOpts }), byAi: true };
+        const value = await deps.llm.structured({ ...input, ...llmOpts, onAnswer: (by) => (answeredBy = by) });
+        return { value, byAi: true };
       } catch (e) {
         checkAborted();
         degraded = { stage: where, reason: describeLlmFailure(e) };
@@ -369,8 +372,8 @@ async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOpti
     slopSignals,
     ...(replay ? { replay } : {}),
     model: {
-      provider: deps.llm.provider,
-      model: deps.llm.model,
+      provider: answeredBy?.provider ?? deps.llm.provider,
+      model: answeredBy?.model ?? deps.llm.model,
       mode: degraded ? "degraded" : deps.llm.provider === "scripted" ? "scripted" : "live",
       ...(degraded ? { degraded: { stage: degraded.stage, reason: degraded.reason, checks } } : {}),
     },
@@ -389,6 +392,11 @@ const EMPTY_CLAIMS: ClaimsOutput = { components: [], impact: "", preconditions: 
 /** Why the LLM dropped out, in one line safe to show anyone (LlmError messages are already redacted). */
 export function describeLlmFailure(e: unknown): string {
   if (!(e instanceof LlmError)) return `The AI failed: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}`;
+  if (e instanceof LlmFallbackError) {
+    return e.attempts
+      .map((a) => describeLlmFailure(new LlmError(a.message, { code: a.code, provider: a.provider, model: a.model, ...(a.status !== undefined ? { status: a.status } : {}) })))
+      .join("; then ");
+  }
   const who = e.model ? `${e.provider} ${e.model}` : e.provider;
   switch (e.code) {
     case "timeout":

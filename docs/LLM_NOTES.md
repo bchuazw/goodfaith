@@ -33,6 +33,15 @@ Environment for `llmFromEnv(env?, overrides?)`:
 - Keys: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `OPENAI_API_KEY` (or `OPENROUTER_API_KEY` / `GROQ_API_KEY` with those presets).
 - `OPENAI_BASE_URL`, plus optional `LLM_TIMEOUT_MS` and `LLM_MAX_RETRIES`.
 
+Fallback provider (`withFallback`, or `LLM_FALLBACK_PROVIDER` + optional `LLM_FALLBACK_MODEL` in `llmFromEnv`):
+- The chain tries the primary, then the fallback, moving on only when `shouldFallBack(err)` is true: auth errors (401/403), 408/429/5xx/529, timeouts, network errors and refusals. It never moves on for our own bugs (400/404/422, `LlmValidationError` schema mismatches, config, truncated tool calls) or when the caller aborts.
+- With a fallback the primary does not retry (moving on is faster). A model that just failed is tried last for 60 s (10 min after an auth error).
+- A tool loop moves on only while no tool has run, since tools may have side effects.
+- The model that answered is reported through the call's `onAnswer({ provider, model })`; triage records it in `verdict.model`. `Llm.fallbacks` lists the chain for display. If every model fails, the error is an `LlmFallbackError` whose `attempts` lists each one.
+- The fallback's key must be present, or `llmFromEnv` throws. If only the fallback has a key, it is used alone. `scripted` is not allowed as a fallback, because triage's degraded mode already covers that.
+- Recommended hosted setup: `LLM_PROVIDER=anthropic`, `LLM_MODEL=claude-opus-5-5`, `LLM_FALLBACK_PROVIDER=gemini`, `LLM_FALLBACK_MODEL=gemini-3.5-flash` (on 2026-11-02 `gemini-3.8-flash` and `gemini-flash-latest` timed out on the free tier, while `gemini-3.5-flash` answered in about 3 s, though it also returns 503 at busy times).
+- Gemini schemas carry no `minItems`/`maxItems`; the bounds go into the description. `gemini-3.5-flash` answered 400 INVALID_ARGUMENT for the triage claims schema with nested `maxItems` and accepted it without them (verified live 2026-11-02). zod still enforces the bounds.
+
 Provider selection:
 - With no provider set, the first key found wins.
 - A provider without a usable key falls back to `scripted`.

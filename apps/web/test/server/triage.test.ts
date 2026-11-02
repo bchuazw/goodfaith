@@ -1,7 +1,7 @@
 import type { TriageEvent } from "@goodfaith/core";
 import { createLlm } from "@goodfaith/llm";
 import { describe, expect, it } from "vitest";
-import { TRIAGE_LLM_DEFAULTS, triageLlmEnv } from "@/lib/server/mode";
+import { llmForMode, TRIAGE_LLM_DEFAULTS, triageLlmEnv } from "@/lib/server/mode";
 import { submitReport } from "@/lib/server/reports";
 import { DEFAULT_CONFIG } from "@/lib/server/services";
 import type { TriageEngine } from "@/lib/server/triage-engine";
@@ -182,6 +182,21 @@ describe("degraded mode in the web app", () => {
     expect(v?.model.degraded?.checks.length).toBeGreaterThanOrEqual(5);
     expect((await queueRows(env.svc)).find((r) => r.id === id)).toMatchObject({ verdict: "NEEDS_HUMAN", aiUnavailable: true });
     await expect(settle(env.svc, id, { action: "capture", confirm: true })).rejects.toMatchObject({ code: "ACTION_NOT_ALLOWED" });
+  });
+});
+
+describe("provider fallback in live mode", () => {
+  it("LLM_FALLBACK_PROVIDER / LLM_FALLBACK_MODEL chain Claude to Gemini, and the mode badge shows both", () => {
+    const llm = llmForMode("live", {
+      LLM_PROVIDER: "anthropic",
+      ANTHROPIC_API_KEY: "sk-ant-api03-TESTTESTTESTTEST0123456789",
+      GEMINI_API_KEY: "AIzaSyDUMMYDUMMYDUMMYDUMMY0123456789",
+      LLM_FALLBACK_PROVIDER: "gemini",
+      LLM_FALLBACK_MODEL: "gemini-3.5-flash",
+    });
+    expect([llm.provider, llm.model, llm.fallbacks]).toEqual(["anthropic", "claude-opus-5-5", [{ provider: "gemini", model: "gemini-3.5-flash" }]]);
+    const env = testEnv({ llm });
+    expect(env.svc.mode.llm).toEqual({ provider: "anthropic", model: "claude-opus-5-5", fallbacks: [{ provider: "gemini", model: "gemini-3.5-flash" }] });
   });
 });
 

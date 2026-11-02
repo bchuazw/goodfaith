@@ -15,7 +15,8 @@ import type { TriageEngine } from "./triage-engine";
 export type ModeInfo = {
   app: AppMode;
   paypal: "mock" | "sandbox" | "live";
-  llm: { provider: string; model: string };
+  /** The triage model, and the models tried after it when it is unusable (LLM_FALLBACK_PROVIDER). */
+  llm: { provider: string; model: string; fallbacks?: Array<{ provider: string; model: string }> };
   triage: TriageEngine["kind"];
   store: string;
   /** What is simulated right now, for the MOCK badge. Empty means nothing is. */
@@ -96,7 +97,7 @@ export function createServices(opts: {
   if (opts.llm.provider === "scripted") mocks.push("LLM: scripted, deterministic heuristics");
   if (opts.triage.kind === "fixture") mocks.push("Triage: a test fixture engine");
   return {
-    mode: { app: opts.app, paypal: paypalMode, llm: { provider: opts.llm.provider, model: opts.llm.model }, triage: opts.triage.kind, store: opts.store.kind, mocks },
+    mode: { app: opts.app, paypal: paypalMode, llm: { provider: opts.llm.provider, model: opts.llm.model, ...(opts.llm.fallbacks?.length ? { fallbacks: opts.llm.fallbacks.map((f) => ({ ...f })) } : {}) }, triage: opts.triage.kind, store: opts.store.kind, mocks },
     db: openDb(opts.store),
     paypal: opts.paypal,
     llm: opts.llm,

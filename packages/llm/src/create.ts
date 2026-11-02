@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { createEngine, type EngineOptions } from "./engine.js";
 import { LlmError } from "./errors.js";
+import { withFallback } from "./fallback.js";
 import { ANTHROPIC_DEFAULT_MODEL, anthropicAdapter } from "./providers/anthropic.js";
 import { GEMINI_DEFAULT_MODEL, geminiAdapter } from "./providers/gemini.js";
 import { OPENAI_DEFAULT_MODEL, openaiAdapter } from "./providers/openai.js";
@@ -105,6 +106,11 @@ export function createLlm(cfg: LlmConfig): Llm {
  * openrouter | groq | ollama | scripted), LLM_MODEL, ANTHROPIC_API_KEY, GEMINI_API_KEY (or GOOGLE_API_KEY),
  * OPENAI_API_KEY, OPENAI_BASE_URL, optional LLM_TIMEOUT_MS / LLM_MAX_RETRIES. With no provider set, the first
  * available key wins; with no usable key it returns the scripted provider.
+ *
+ * LLM_FALLBACK_PROVIDER (+ optional LLM_FALLBACK_MODEL) adds a second model tried when the first is unusable
+ * (auth error, overload, timeout, refusal; see shouldFallBack). The fallback's key must be present, or this
+ * throws. With a fallback the primary does not retry: moving on is faster than waiting again. If only the
+ * fallback has a key, it is returned on its own.
  */
 export function llmFromEnv(env?: Record<string, string | undefined>, overrides: Partial<LlmConfig> = {}): Llm {
   const e = env ?? processEnv();
@@ -112,66 +118,95 @@ export function llmFromEnv(env?: Record<string, string | undefined>, overrides: 
     const v = e[k]?.trim();
     return v ? v : undefined;
   };
-  const requested = get("LLM_PROVIDER")?.toLowerCase();
-  const preset = requested ? OPENAI_COMPATIBLE_PRESETS[requested] : undefined;
-  let provider: LlmProvider | undefined;
-  switch (requested) {
-    case undefined:
-      break;
-    case "anthropic":
-    case "claude":
-      provider = "anthropic";
-      break;
-    case "gemini":
-    case "google":
-      provider = "gemini";
-      break;
-    case "openai":
-    case "openai-compatible":
-    case "openrouter":
-    case "groq":
-    case "ollama":
-      provider = "openai-compatible";
-      break;
-    case "scripted":
-    case "mock":
-      provider = "scripted";
-      break;
-    default:
-      throw new LlmError(`Unknown LLM_PROVIDER "${requested}".`, { code: "config", provider: requested, model: "" });
-  }
-
   const keys = {
     anthropic: get("ANTHROPIC_API_KEY"),
     gemini: get("GEMINI_API_KEY") ?? get("GOOGLE_API_KEY"),
-    openai: get("OPENAI_API_KEY") ?? (preset?.keyEnv ? get(preset.keyEnv) : undefined),
   };
-  const openaiBaseUrl = get("OPENAI_BASE_URL") ?? preset?.baseUrl;
-  if (!provider) {
-    if (keys.anthropic) provider = "anthropic";
-    else if (keys.gemini) provider = "gemini";
-    else if (keys.openai || openaiBaseUrl) provider = "openai-compatible";
-    else provider = "scripted";
-  }
-
-  const model = get("LLM_MODEL");
   const common: Partial<LlmConfig> = {
     ...(get("LLM_TIMEOUT_MS") ? { timeoutMs: Number(get("LLM_TIMEOUT_MS")) } : {}),
     ...(get("LLM_MAX_RETRIES") ? { maxRetries: Number(get("LLM_MAX_RETRIES")) } : {}),
   };
 
-  if (provider === "anthropic" && keys.anthropic) {
-    return createLlm({ provider, apiKey: keys.anthropic, model, baseUrl: get("ANTHROPIC_BASE_URL"), ...common, ...overrides });
+  /** The config for one provider choice, or undefined when its key is missing. */
+  const configFor = (choice: ProviderChoice, model: string | undefined): LlmConfig | undefined => {
+    const openaiKey = get("OPENAI_API_KEY") ?? (choice.preset?.keyEnv ? get(choice.preset.keyEnv) : undefined);
+    const openaiBaseUrl = get("OPENAI_BASE_URL") ?? choice.preset?.baseUrl;
+    switch (choice.provider) {
+      case "anthropic":
+        return keys.anthropic ? { provider: "anthropic", apiKey: keys.anthropic, model, baseUrl: get("ANTHROPIC_BASE_URL"), ...common } : undefined;
+      case "gemini":
+        return keys.gemini ? { provider: "gemini", apiKey: keys.gemini, model, baseUrl: get("GEMINI_BASE_URL"), ...common } : undefined;
+      case "openai-compatible": {
+        const local = openaiBaseUrl !== undefined && !/api\.openai\.com/i.test(openaiBaseUrl);
+        return openaiKey || local ? { provider: "openai-compatible", apiKey: openaiKey, model, baseUrl: openaiBaseUrl, ...common } : undefined;
+      }
+      default:
+        return undefined;
+    }
+  };
+
+  let primaryChoice = parseProviderChoice(get("LLM_PROVIDER"), "LLM_PROVIDER");
+  if (!primaryChoice) {
+    if (keys.anthropic) primaryChoice = { provider: "anthropic" };
+    else if (keys.gemini) primaryChoice = { provider: "gemini" };
+    else if (get("OPENAI_API_KEY") || get("OPENAI_BASE_URL")) primaryChoice = { provider: "openai-compatible" };
+    else primaryChoice = { provider: "scripted" };
   }
-  if (provider === "gemini" && keys.gemini) {
-    return createLlm({ provider, apiKey: keys.gemini, model, baseUrl: get("GEMINI_BASE_URL"), ...common, ...overrides });
+  const primaryCfg = configFor(primaryChoice, get("LLM_MODEL"));
+
+  const fallbackChoice = parseProviderChoice(get("LLM_FALLBACK_PROVIDER"), "LLM_FALLBACK_PROVIDER");
+  if (fallbackChoice) {
+    if (fallbackChoice.provider === "scripted") {
+      throw new LlmError("LLM_FALLBACK_PROVIDER cannot be scripted: triage already falls back to its deterministic checks.", { code: "config", provider: "scripted", model: "" });
+    }
+    const fallbackCfg = configFor(fallbackChoice, get("LLM_FALLBACK_MODEL"));
+    if (!fallbackCfg) {
+      throw new LlmError(`LLM_FALLBACK_PROVIDER=${get("LLM_FALLBACK_PROVIDER")} has no API key for ${fallbackChoice.provider}.`, {
+        code: "config",
+        provider: fallbackChoice.provider,
+        model: get("LLM_FALLBACK_MODEL") ?? "",
+      });
+    }
+    const { provider: _p, model: _m, apiKey: _k, baseUrl: _b, script: _s, ...shared } = overrides;
+    const fallback = createLlm({ ...fallbackCfg, ...shared });
+    if (!primaryCfg) return fallback;
+    const primary = createLlm({ ...primaryCfg, ...overrides, maxRetries: 0 });
+    if (primary.provider === fallback.provider && primary.model === fallback.model) return createLlm({ ...primaryCfg, ...overrides });
+    return withFallback(primary, [fallback]);
   }
-  const localOpenAICompatible = openaiBaseUrl !== undefined && !/api\.openai\.com/i.test(openaiBaseUrl);
-  if (provider === "openai-compatible" && (keys.openai || localOpenAICompatible)) {
-    return createLlm({ provider, apiKey: keys.openai, model, baseUrl: openaiBaseUrl, ...common, ...overrides });
-  }
+
+  if (primaryCfg) return createLlm({ ...primaryCfg, ...overrides });
   // No usable credentials: deterministic scripted provider (zero-key demo).
   return createLlm({ provider: "scripted", ...common, ...overrides });
+}
+
+type ProviderChoice = { provider: LlmProvider; preset?: { baseUrl: string; keyEnv?: string } };
+
+/** Parses an LLM_PROVIDER-style value. Unset gives undefined; an unknown name throws, so a typo never becomes scripted. */
+function parseProviderChoice(raw: string | undefined, envName: string): ProviderChoice | undefined {
+  const requested = raw?.toLowerCase();
+  switch (requested) {
+    case undefined:
+      return undefined;
+    case "anthropic":
+    case "claude":
+      return { provider: "anthropic" };
+    case "gemini":
+    case "google":
+      return { provider: "gemini" };
+    case "openai":
+    case "openai-compatible":
+      return { provider: "openai-compatible" };
+    case "openrouter":
+    case "groq":
+    case "ollama":
+      return { provider: "openai-compatible", preset: OPENAI_COMPATIBLE_PRESETS[requested] };
+    case "scripted":
+    case "mock":
+      return { provider: "scripted" };
+    default:
+      throw new LlmError(`Unknown ${envName} "${requested}".`, { code: "config", provider: requested, model: "" });
+  }
 }
 
 /**

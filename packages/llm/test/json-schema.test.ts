@@ -93,3 +93,12 @@ describe("output helpers", () => {
     });
   });
 });
+
+describe("toGeminiSchema item bounds", () => {
+  it("moves minItems/maxItems into the description (gemini-3.5-flash rejects nested maxItems)", () => {
+    const out = toGeminiSchema(zodToJsonSchema(z.object({ xs: z.array(z.string()).min(1).max(20).describe("Things"), ys: z.array(z.number()).max(5) }))) as any;
+    expect(out.properties.xs).toEqual({ type: "ARRAY", description: "Things at least 1, at most 20 items.", items: { type: "STRING" } });
+    expect(out.properties.ys).toEqual({ type: "ARRAY", description: "at most 5 items.", items: { type: "NUMBER" } });
+  });
+});
+

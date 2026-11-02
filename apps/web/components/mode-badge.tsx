@@ -53,6 +53,11 @@ export function ModeBadge({ mode }: { mode: ModeView }) {
             </p>
             <p className="text-muted-foreground">
               Triage model <span className="font-mono text-foreground">{mode.llm.model}</span> ({mode.llm.provider})
+              {mode.llm.fallbacks?.map((f) => (
+                <span key={`${f.provider}/${f.model}`}>
+                  , then <span className="font-mono text-foreground">{f.model}</span> ({f.provider}) if it is unavailable
+                </span>
+              ))}
             </p>
             <p className="text-muted-foreground">
               Store <span className="font-mono text-foreground">{mode.store}</span>

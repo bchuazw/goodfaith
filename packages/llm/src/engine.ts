@@ -106,7 +106,10 @@ export function createEngine(adapter: ProviderAdapter, opts: EngineOptions): Llm
       const parsed = parseJsonLoose(turn.text);
       if (parsed.ok) {
         const result = i.schema.safeParse(stripNullOptionals(parsed.value, jsonSchema));
-        if (result.success) return result.data;
+        if (result.success) {
+          answered(i.onAnswer);
+          return result.data;
+        }
         issues = formatZodIssues(result.error);
       } else {
         issues = [parsed.error];
@@ -165,6 +168,7 @@ export function createEngine(adapter: ProviderAdapter, opts: EngineOptions): Llm
       if (turn.toolCalls.length === 0) {
         const text = turn.text.trim();
         emit({ type: "final", text });
+        answered(i.onAnswer);
         return { finalText: text, events, stopReason: "final", steps: step + 1 };
       }
       if (turn.stopReason === "max_tokens") {
@@ -198,6 +202,7 @@ export function createEngine(adapter: ProviderAdapter, opts: EngineOptions): Llm
 
     const text = `Stopped after ${maxSteps} steps without a final answer.`;
     emit({ type: "final", text });
+    answered(i.onAnswer);
     return { finalText: text, events, stopReason: "max_steps", steps: maxSteps };
   }
 
@@ -242,6 +247,14 @@ export function createEngine(adapter: ProviderAdapter, opts: EngineOptions): Llm
 
   function configError(message: string): LlmError {
     return new LlmError(message, { code: "config", provider, model });
+  }
+
+  function answered(hook: ((by: { provider: string; model: string }) => void) | undefined): void {
+    try {
+      hook?.({ provider, model });
+    } catch {
+      // A reporting hook must never fail the call.
+    }
   }
 
   return { provider, model, structured, toolLoop };

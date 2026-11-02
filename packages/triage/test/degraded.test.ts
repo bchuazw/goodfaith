@@ -1,5 +1,5 @@
 import { type PriorReport, type ReportInput, triageVerdictSchema } from "@goodfaith/core";
-import { createLlm, type Llm, LlmError, type StructuredInput } from "@goodfaith/llm";
+import { createLlm, type Llm, LlmError, type StructuredInput, withFallback } from "@goodfaith/llm";
 import { createLanternRunner, lanternCodeSource } from "@goodfaith/target";
 import { describe, expect, it } from "vitest";
 import { EVAL_CASES } from "../evals/reports.js";
@@ -183,3 +183,42 @@ describe("degraded mode helpers", () => {
     expect(describeLlmFailure(new Error("boom"))).toBe("The AI failed: boom");
   });
 });
+
+describe("provider fallback in triage", () => {
+  /** Answers like the scripted heuristics but as a named model, so the verdict can show who answered. */
+  const namedModel = (provider: string, model: string): Llm => {
+    const inner = createLlm({ provider: "scripted" });
+    return {
+      provider,
+      model,
+      structured: async <T>(i: StructuredInput<T>) => {
+        const v = await inner.structured({ ...i, onAnswer: undefined });
+        i.onAnswer?.({ provider, model });
+        return v;
+      },
+      toolLoop: (i) => inner.toolLoop(i),
+    };
+  };
+  const deadClaude: Llm = {
+    provider: "anthropic",
+    model: "claude-opus-5-5",
+    structured: () => Promise.reject(new LlmError("anthropic API error 401: invalid x-api-key", { code: "http", status: 401, provider: "anthropic", model: "claude-opus-5-5" })),
+    toolLoop: () => Promise.reject(new Error("unused")),
+  };
+
+  it("records the fallback model that actually answered", async () => {
+    const llm = withFallback(deadClaude, [namedModel("gemini", "gemini-3.5-flash")]);
+    const v = await triageReport(caseReport("hero1_slop"), deps(llm));
+    expect(v.model).toEqual({ provider: "gemini", model: "gemini-3.5-flash", mode: "live" });
+    expect(v.verdict).toBe("SLOP"); // a working fallback is the AI: SLOP stays possible
+  });
+
+  it("when every model fails, the degraded reason names each one", async () => {
+    const overloaded: Llm = { ...deadClaude, provider: "gemini", model: "gemini-3.5-flash", structured: () => Promise.reject(new LlmError("503", { code: "http", status: 503, provider: "gemini", model: "gemini-3.5-flash" })) };
+    const v = await triageReport(caseReport("hero1_slop"), deps(withFallback(deadClaude, [overloaded])));
+    expect(v.model.mode).toBe("degraded");
+    expect(v.model.degraded?.reason).toBe("anthropic claude-opus-5-5 returned HTTP 401 (authentication failed); then gemini gemini-3.5-flash returned HTTP 503 (overloaded)");
+    expect(v.verdict).toBe("NEEDS_HUMAN");
+  });
+});
+

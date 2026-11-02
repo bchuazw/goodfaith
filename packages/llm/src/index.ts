@@ -3,6 +3,7 @@
 
 export { createLlm, DEFAULT_MODELS, defineTool, llmFromEnv, withScript } from "./create.js";
 export { LlmError, type LlmErrorCode, LlmValidationError } from "./errors.js";
+export { type FallbackAttempt, type FallbackOptions, LlmFallbackError, type ModelRef, shouldFallBack, withFallback } from "./fallback.js";
 export { toAnthropicSchema, toGeminiSchema, toOpenAIStrictSchema, zodToJsonSchema } from "./json-schema.js";
 export { collectValues, fitToSchema, normalizeKey } from "./scripts/fit.js";
 export { defaultScriptFor, type ScriptName, scripts } from "./scripts/index.js";

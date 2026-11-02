@@ -34,6 +34,8 @@ export type StructuredInput<T> = {
   effort?: LlmEffort;
   /** Extension: cancels the call (including retries and backoff). Rejects with LlmError code "aborted". */
   signal?: AbortSignal;
+  /** Extension: told which model produced the result (with a fallback chain, not always the primary). */
+  onAnswer?: (by: { provider: string; model: string }) => void;
 };
 
 export type ToolLoopInput = {
@@ -47,6 +49,8 @@ export type ToolLoopInput = {
   effort?: LlmEffort;
   /** Extension: cancels the loop (model calls, retries, backoff and running tools). Rejects with LlmError code "aborted". */
   signal?: AbortSignal;
+  /** Extension: told which model produced the result (with a fallback chain, not always the primary). */
+  onAnswer?: (by: { provider: string; model: string }) => void;
 };
 
 export type ToolLoopResult = {
@@ -61,6 +65,8 @@ export type ToolLoopResult = {
 export interface Llm {
   provider: string;
   model: string;
+  /** Extension: the models tried after this one when it is unusable (llmFromEnv with LLM_FALLBACK_PROVIDER). */
+  fallbacks?: ReadonlyArray<{ provider: string; model: string }>;
   structured<T>(i: StructuredInput<T>): Promise<T>;
   toolLoop(i: ToolLoopInput): Promise<ToolLoopResult>;
 }

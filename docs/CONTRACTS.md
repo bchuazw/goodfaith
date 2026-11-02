@@ -17,7 +17,7 @@ These are the interfaces between the packages, written so that people working in
 |---|---|
 | `@goodfaith/core` | Domain types and zod schemas shared by everything below. No logic beyond validation. |
 | `@goodfaith/paypal` | The PayPal REST client and its mock (copied from the earlier project, verified live). See `docs/PAYPAL_NOTES.md`. |
-| `@goodfaith/llm` | Provider-agnostic structured output and tool loops: Anthropic (default `claude-opus-5-5`), Gemini, OpenAI-compatible, and scripted. See `docs/LLM_NOTES.md`. |
+| `@goodfaith/llm` | Provider-agnostic structured output and tool loops: Anthropic (default `claude-opus-5-5`), Gemini, OpenAI-compatible, and scripted, with an optional fallback chain (`LLM_FALLBACK_PROVIDER`). Calls take `signal` and `onAnswer`. See `docs/LLM_NOTES.md`. |
 | `@goodfaith/target` | **Lantern**, the demo target app (versions 1.4.0 vulnerable, 1.4.1 fixed), its `CodeSource`, and the sandboxed in-process `TargetRunner`. |
 | `@goodfaith/triage` | The triage engine (`triageReport`), the verdict policy, the GitHub code source, and evals. |
 | `apps/web` | The Next.js app: program, report and deposit flow, status page, maintainer console (AG Grid), settlement, webhooks, transparency, judge mode. |

@@ -249,8 +249,14 @@ function geminiNode(s: S): S {
   if ((t === "number" || t === "integer") && typeof s.maximum === "number") out.maximum = s.maximum;
   if (t === "array") {
     if (isPlainObject(s.items)) out.items = geminiNode(s.items);
-    if (typeof s.minItems === "number") out.minItems = String(s.minItems);
-    if (typeof s.maxItems === "number") out.maxItems = String(s.maxItems);
+    // Item-count bounds go into the description, not the schema: gemini-3.5-flash answers 400
+    // INVALID_ARGUMENT for the triage claims schema when its nested arrays carry maxItems (verified live
+    // 2026-11-02), and the same schema without them is accepted. zod still enforces the bounds afterwards.
+    const bounds = [
+      typeof s.minItems === "number" && s.minItems > 0 ? `at least ${s.minItems}` : undefined,
+      typeof s.maxItems === "number" ? `at most ${s.maxItems}` : undefined,
+    ].filter(Boolean);
+    if (bounds.length > 0) out.description = [out.description, `${bounds.join(", ")} items.`].filter(Boolean).join(" ");
   }
   if (t === "object") {
     const props = isPlainObject(s.properties) ? s.properties : {};

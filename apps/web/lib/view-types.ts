@@ -139,7 +139,7 @@ export type StreamTriageEvent = { seq: number; attempt: number; event: TriageEve
 export type ModeView = {
   app: "mock" | "live";
   paypal: "mock" | "sandbox" | "live";
-  llm: { provider: string; model: string };
+  llm: { provider: string; model: string; fallbacks?: Array<{ provider: string; model: string }> };
   triage: "triage" | "fixture";
   store: string;
   mocks: string[];
