@@ -1,0 +1,14 @@
+# Never upload local secrets, data or build output with `vercel deploy`.
+.env
+.env.*
+**/.env
+**/.env.*
+.data
+**/.data
+.cache
+**/.cache
+**/node_modules
+**/.next
+**/coverage
+tools/video/out
+.playwright-mcp
