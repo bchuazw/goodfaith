@@ -32,6 +32,8 @@ export type StructuredInput<T> = {
   name: string;
   /** Extension: per-call effort (Anthropic only; overrides LlmConfig.effort). */
   effort?: LlmEffort;
+  /** Extension: cancels the call (including retries and backoff). Rejects with LlmError code "aborted". */
+  signal?: AbortSignal;
 };
 
 export type ToolLoopInput = {
@@ -43,6 +45,8 @@ export type ToolLoopInput = {
   onEvent?: (e: ToolEvent) => void;
   /** Extension: per-call effort (Anthropic only; overrides LlmConfig.effort). */
   effort?: LlmEffort;
+  /** Extension: cancels the loop (model calls, retries, backoff and running tools). Rejects with LlmError code "aborted". */
+  signal?: AbortSignal;
 };
 
 export type ToolLoopResult = {

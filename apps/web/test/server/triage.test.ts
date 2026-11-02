@@ -1,6 +1,9 @@
 import type { TriageEvent } from "@goodfaith/core";
+import { createLlm } from "@goodfaith/llm";
 import { describe, expect, it } from "vitest";
+import { TRIAGE_LLM_DEFAULTS, triageLlmEnv } from "@/lib/server/mode";
 import { submitReport } from "@/lib/server/reports";
+import { DEFAULT_CONFIG } from "@/lib/server/services";
 import type { TriageEngine } from "@/lib/server/triage-engine";
 import { reconcileTriage, rerunTriage, runTriage, triageEvents } from "@/lib/server/triage";
 import { heroInput, testEnv, triagedClaim } from "./helpers";
@@ -89,5 +92,79 @@ describe("triage service", () => {
     expect(report.input.reporter.trusted).toBe(true);
     expect(report.status).toBe("queued");
   });
+});
 
+/** Gemini behind a fetch that never answers (an overloaded free tier); records each request's signal. */
+function hangingGemini(timeoutMs = 60_000) {
+  const signals: AbortSignal[] = [];
+  const fetch = ((_input: RequestInfo | URL, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      if (init?.signal) signals.push(init.signal);
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")));
+    })) as typeof globalThis.fetch;
+  return { llm: createLlm({ provider: "gemini", apiKey: "AIzaSyDUMMYDUMMYDUMMYDUMMY0123456789", model: "gemini-hang", fetch, timeoutMs, maxRetries: 1, retryBaseDelayMs: 0 }), signals };
+}
+
+const stageEvent = (stage: "claims", status: "start" | "done"): TriageEvent => ({ type: "stage", stage, status, at: new Date().toISOString() });
+
+describe("triage time limits (a hosted function has 300 s)", () => {
+  it("a hung engine that ignores the abort still ends as triage_failed at the hard limit, and can be re-run", async () => {
+    const env = testEnv({ config: { triageTimeoutMs: 120 } });
+    let emitLate: (() => void) | undefined;
+    const hung: TriageEngine = {
+      kind: "fixture",
+      run: (_report, _deps, opts) => {
+        opts?.onEvent?.(stageEvent("claims", "start"));
+        emitLate = () => opts?.onEvent?.(stageEvent("claims", "done"));
+        return new Promise(() => undefined); // never settles, never looks at the signal
+      },
+    };
+    const svc = { ...env.svc, triage: hung };
+    const { report } = await submitReport(svc, heroInput("idor", "free"));
+    const started = Date.now();
+    await env.drain();
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(await svc.db.reports.value(report.id)).toMatchObject({ status: "triage_failed", triage: { attempt: 1, error: expect.stringMatching(/stopped after 0 s; re-run/) } });
+
+    emitLate?.(); // a stray event from the abandoned run is not written to the attempt
+    await new Promise((r) => setTimeout(r, 20));
+    expect(await triageEvents(svc, report.id)).toHaveLength(1);
+
+    await rerunTriage(env.svc, report.id);
+    await env.drain();
+    expect(await env.svc.db.reports.value(report.id)).toMatchObject({ status: "triaged", triage: { attempt: 2 } });
+  });
+
+  it("a model that never answers is cancelled at the hard limit: its request is aborted and the run fails cleanly", async () => {
+    const { llm, signals } = hangingGemini();
+    const env = testEnv({ llm, config: { triageTimeoutMs: 150, triageLlmBudgetMs: 60_000 } });
+    const { report } = await submitReport(env.svc, heroInput("idor", "free"));
+    const started = Date.now();
+    await env.drain();
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(await env.svc.db.reports.value(report.id)).toMatchObject({ status: "triage_failed" });
+    expect(signals).toHaveLength(1);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(await env.svc.db.verdicts.value(report.id)).toBeUndefined();
+  });
+
+  it("when the AI budget runs out first, the run still finishes with a verdict", async () => {
+    const { llm, signals } = hangingGemini();
+    const env = testEnv({ llm, config: { triageTimeoutMs: 5_000, triageLlmBudgetMs: 80 } });
+    const { report } = await submitReport(env.svc, heroInput("idor", "free"));
+    await env.drain();
+    expect(await env.svc.db.reports.value(report.id)).toMatchObject({ status: "triaged" });
+    expect((await env.svc.db.verdicts.value(report.id))?.verdict).toBe("REPRODUCED");
+    expect(signals.every((s) => s.aborted)).toBe(true);
+  });
+
+  it("the defaults fit: 45 s per LLM attempt, one retry, a budget below the hard limit, and both well inside 300 s", () => {
+    expect(triageLlmEnv({})).toMatchObject(TRIAGE_LLM_DEFAULTS);
+    expect(triageLlmEnv({ LLM_TIMEOUT_MS: "20000", LLM_MAX_RETRIES: " " })).toMatchObject({ LLM_TIMEOUT_MS: "20000", LLM_MAX_RETRIES: "1" });
+    const perCall = Number(TRIAGE_LLM_DEFAULTS.LLM_TIMEOUT_MS) * (1 + Number(TRIAGE_LLM_DEFAULTS.LLM_MAX_RETRIES));
+    expect(perCall).toBeLessThanOrEqual(DEFAULT_CONFIG.triageLlmBudgetMs);
+    expect(DEFAULT_CONFIG.triageLlmBudgetMs).toBeLessThan(DEFAULT_CONFIG.triageTimeoutMs);
+    expect(DEFAULT_CONFIG.triageTimeoutMs).toBeLessThanOrEqual(240_000);
+    expect(DEFAULT_CONFIG.triageStaleMs).toBeGreaterThan(DEFAULT_CONFIG.triageTimeoutMs);
+  });
 });

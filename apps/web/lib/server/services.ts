@@ -31,8 +31,16 @@ export type ServicesConfig = {
   sandboxVaultId?: string;
   /** Live webhooks verify against this id (PAYPAL_WEBHOOK_ID); the mock signs for its own. */
   webhookId?: string;
-  /** Hard limit for one triage run, inside the 300 s function budget. */
+  /**
+   * Hard limit for one triage run, well inside the 300 s function budget. When it passes the run is
+   * aborted and recorded as triage_failed (re-runnable), even if the engine ignores the abort.
+   */
   triageTimeoutMs: number;
+  /**
+   * Budget for all LLM calls of one run. Once used up, triage finishes on its deterministic checks
+   * (degraded mode) instead of waiting for the model, so a verdict still lands before the hard limit.
+   */
+  triageLlmBudgetMs: number;
   /** A triage claim older than this is treated as abandoned (its instance died). */
   triageStaleMs: number;
   /** Optional maintainer token: when set, settlement needs it (GOODFAITH_MAINTAINER_TOKEN). */
@@ -56,7 +64,7 @@ export type Services = {
   signals: ReportSignals;
 };
 
-export const DEFAULT_CONFIG: ServicesConfig = { triageTimeoutMs: 240_000, triageStaleMs: 290_000 };
+export const DEFAULT_CONFIG: ServicesConfig = { triageTimeoutMs: 200_000, triageLlmBudgetMs: 150_000, triageStaleMs: 290_000 };
 
 export function lanternProgram(): ProgramRecord {
   return {

@@ -1,6 +1,6 @@
 /**
  * The triage engine the web app runs, behind one signature: @goodfaith/triage's
- * `triageReport(report, deps, { onEvent, signal })`.
+ * `triageReport(report, deps, { onEvent, signal, llmBudgetMs })`.
  */
 import type { CodeSource, PriorReport, ReportInput, TargetRunner, TriageEvent, TriageVerdict } from "@goodfaith/core";
 import type { Llm } from "@goodfaith/llm";
@@ -10,7 +10,7 @@ export type TriageDeps = { llm: Llm; code: CodeSource; target?: TargetRunner; pr
 export type TriageFn = (
   report: ReportInput,
   deps: TriageDeps,
-  opts?: { onEvent?: (e: TriageEvent) => void; signal?: AbortSignal },
+  opts?: { onEvent?: (e: TriageEvent) => void; signal?: AbortSignal; llmBudgetMs?: number },
 ) => Promise<TriageVerdict>;
 
 export type TriageEngine = {

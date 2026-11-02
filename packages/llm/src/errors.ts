@@ -3,6 +3,7 @@ export type LlmErrorCode =
   | "http"
   | "network"
   | "timeout"
+  | "aborted"
   | "refusal"
   | "truncated"
   | "validation"

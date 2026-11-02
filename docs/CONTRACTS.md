@@ -173,7 +173,7 @@ export const LANTERN_PROGRAM: {
 
 ```ts
 export type TriageDeps = { llm: Llm; code: CodeSource; target?: TargetRunner; priorReports?: PriorReport[]; now?: () => Date };
-export function triageReport(report: ReportInput, deps: TriageDeps, opts?: { onEvent?: (e: TriageEvent) => void; signal?: AbortSignal }): Promise<TriageVerdict>;
+export function triageReport(report: ReportInput, deps: TriageDeps, opts?: { onEvent?: (e: TriageEvent) => void; signal?: AbortSignal; llmBudgetMs?: number }): Promise<TriageVerdict>;
 export function decideVerdict(input: PolicyInput): { verdict: Verdict; confidence: number; reasons: string[] };   // pure, unit-tested
 export function githubCodeSource(opts: { owner: string; repo: string; token?: string; cacheDir?: string; fetch?: typeof fetch }): CodeSource;
 ```
@@ -190,6 +190,8 @@ export function githubCodeSource(opts: { owner: string; repo: string; token?: st
 4. **NEEDS_HUMAN:** everything else.
 
 SLOP and DUPLICATE are recommendations. Money moves only on a maintainer's action.
+
+**Cancellation and time limits.** `signal` reaches every LLM call (`structured({ ..., signal })`) and the replay; an abort makes `triageReport` reject (an `AbortError`) and nothing is decided. `llmBudgetMs` caps the wall-clock time of all LLM calls in a run: a call still running when it is used up is cancelled, and triage finishes without waiting for the model. The web app uses 45 s per LLM attempt with one retry (`LLM_TIMEOUT_MS`, `LLM_MAX_RETRIES`), a 150 s LLM budget and a 200 s hard limit, after which the run is `triage_failed` and can be re-run.
 
 **Scripted mode** (the zero-key demo) gives the same verdicts on the Lantern demo reports, through heuristics in `@goodfaith/llm`'s scripted provider.
 

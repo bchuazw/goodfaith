@@ -1,6 +1,6 @@
 import { LlmError, LlmValidationError } from "./errors.js";
 import { formatZodIssues, parseJsonLoose, stripNullOptionals, zodToJsonSchema } from "./json-schema.js";
-import { type RetryPolicy, robustCall, withTimeout } from "./robust.js";
+import { abortedError, raceAbort, type RetryPolicy, robustCall, withTimeout } from "./robust.js";
 import type {
   JsonSchema,
   Llm,
@@ -92,10 +92,16 @@ export function createEngine(adapter: ProviderAdapter, opts: EngineOptions): Llm
     let raw = "";
     for (let step = 0; step < 2; step++) {
       state.step = step;
-      const turn = await robustCall(opts.policy, { provider, model, op: "structured", name: i.name, step }, hooks, async (signal) => {
-        const t = await conversation.send(signal);
-        return { value: t, usage: t.usage, stopReason: t.stopReason };
-      });
+      const turn = await robustCall(
+        opts.policy,
+        { provider, model, op: "structured", name: i.name, step },
+        hooks,
+        async (signal) => {
+          const t = await conversation.send(signal);
+          return { value: t, usage: t.usage, stopReason: t.stopReason };
+        },
+        i.signal,
+      );
       raw = turn.text;
       const parsed = parseJsonLoose(turn.text);
       if (parsed.ok) {
@@ -144,10 +150,17 @@ export function createEngine(adapter: ProviderAdapter, opts: EngineOptions): Llm
 
     for (let step = 0; step < maxSteps; step++) {
       state.step = step;
-      const turn = await robustCall(opts.policy, { provider, model, op: "toolLoop", step }, hooks, async (signal) => {
-        const t = await conversation.send(signal);
-        return { value: t, usage: t.usage, stopReason: t.stopReason };
-      });
+      if (i.signal?.aborted) throw abortedError({ provider, model }, i.signal);
+      const turn = await robustCall(
+        opts.policy,
+        { provider, model, op: "toolLoop", step },
+        hooks,
+        async (signal) => {
+          const t = await conversation.send(signal);
+          return { value: t, usage: t.usage, stopReason: t.stopReason };
+        },
+        i.signal,
+      );
 
       if (turn.toolCalls.length === 0) {
         const text = turn.text.trim();
@@ -168,7 +181,7 @@ export function createEngine(adapter: ProviderAdapter, opts: EngineOptions): Llm
         emit({ type: "tool_call", name: call.name, args: call.args });
         const tool = i.tools.find((t) => t.name === call.name);
         const prep = prepared.find((t) => t.name === call.name);
-        const out = await runTool(tool, prep, call, [...names]);
+        const out = await raceAbort(runTool(tool, prep, call, [...names]), i.signal, { provider, model });
         emit({ type: "tool_result", name: call.name, result: out.result, untrusted: out.untrusted });
         state.results.push({
           name: call.name,

@@ -13,4 +13,4 @@ export {
   duplicateSchema,
   type DuplicateOutput,
 } from "./schemas.js";
-export { type TriageDeps, type TriageOptions, triageReport } from "./triage.js";
+export { type TriageDeps, type TriageOptions, triageAbortError, triageReport } from "./triage.js";

@@ -28,9 +28,23 @@ export function paypalForMode(mode: AppMode, env: Env): PayPalClient {
   return client;
 }
 
+/**
+ * Per-call LLM limits that fit triage into a 300 s serverless function: 45 s per attempt and one retry,
+ * so even a model that never answers costs at most ~90 s per call before triage moves on. LLM_TIMEOUT_MS
+ * and LLM_MAX_RETRIES override them.
+ */
+export const TRIAGE_LLM_DEFAULTS = { LLM_TIMEOUT_MS: "45000", LLM_MAX_RETRIES: "1" } as const;
+
+/** The environment the triage LLM is built from: `env`, with TRIAGE_LLM_DEFAULTS filling unset limits. */
+export function triageLlmEnv(env: Env): Env {
+  const out: Env = { ...env };
+  for (const [k, v] of Object.entries(TRIAGE_LLM_DEFAULTS)) if (!out[k]?.trim()) out[k] = v;
+  return out;
+}
+
 export function llmForMode(mode: AppMode, env: Env): Llm {
   if (mode === "mock") return llmFromEnv({ LLM_PROVIDER: "scripted" });
-  const llm = llmFromEnv(env);
+  const llm = llmFromEnv(triageLlmEnv(env));
   if (llm.provider === "scripted") {
     throw new Error("GOODFAITH_MODE=live needs a real LLM: set ANTHROPIC_API_KEY (or LLM_PROVIDER and that provider's key)");
   }

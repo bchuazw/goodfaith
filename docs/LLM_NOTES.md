@@ -94,6 +94,7 @@ Spotlighting lowers the injection success rate but does not remove the risk. The
 
 - **Retries:** 2 by default on 408/409/429/5xx, timeouts and network errors. Backoff is exponential with jitter (`retryBaseDelayMs` 500, `retryMaxDelayMs` 8000) and honours `retry-after` / `retry-after-ms`. SDK-level retries are switched off so every attempt is visible.
 - **Timeout:** each model call is limited by `timeoutMs` (default 120 s), enforced with an `AbortSignal` and a race.
+- **Cancellation:** `structured()` and `toolLoop()` take an optional `signal`. Aborting it aborts the in-flight HTTP request, skips any retry, ends a pending backoff early and stops a running tool; the call rejects with `LlmError` code `aborted` (never retryable). The signal's reason, when it is an `Error` or a string, is included in the message.
 - **Log hook:** `onLog(entry)` fires once per attempt, with `{ts, provider, model, op, name?, step, attempt, ok, latencyMs, usage?{inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, totalTokens}, stopReason?, status?, error?, willRetry?}`. Entries never include prompts or keys. If the hook throws, the error is swallowed.
 - **Redaction:** error messages (thrown and logged) have the configured key removed, along with anything that looks like an API key (`sk-ant-…`, `sk-…`, `AIza…`, `gsk_…`, auth headers, `?key=`). Tests check this with a 401 that echoes the key.
 

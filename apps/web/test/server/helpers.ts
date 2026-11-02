@@ -1,10 +1,10 @@
-import { createLlm } from "@goodfaith/llm";
+import { createLlm, type Llm } from "@goodfaith/llm";
 import { createMockPayPal, type MockPayPal } from "@goodfaith/paypal";
 import { triageReport } from "@goodfaith/triage";
 import { approveDeposit, createDepositOrder } from "@/lib/server/deposits";
 import { HERO_REPORTS, type HeroKey } from "@/lib/hero-reports";
 import { submitReport } from "@/lib/server/reports";
-import { createServices, type Services } from "@/lib/server/services";
+import { createServices, type Services, type ServicesConfig } from "@/lib/server/services";
 import { createMemoryStore, type Store } from "@/lib/server/store";
 import { handleWebhook } from "@/lib/server/webhooks";
 
@@ -22,7 +22,9 @@ export type TestEnv = {
  * Services over a memory store and a seeded PayPal mock. Two TestEnvs built on the same store and mock
  * behave like two serverless instances: shared Store, no shared process state.
  */
-export function testEnv(opts: { store?: Store; paypal?: MockPayPal; webhooks?: boolean; now?: () => Date } = {}): TestEnv {
+export function testEnv(
+  opts: { store?: Store; paypal?: MockPayPal; webhooks?: boolean; now?: () => Date; llm?: Llm; config?: Partial<ServicesConfig> } = {},
+): TestEnv {
   const store = opts.store ?? createMemoryStore();
   const paypal = opts.paypal ?? createMockPayPal({ seed: `web-${Math.random()}` });
   const pending: Array<() => Promise<void>> = [];
@@ -30,8 +32,9 @@ export function testEnv(opts: { store?: Store; paypal?: MockPayPal; webhooks?: b
     app: "mock",
     store,
     paypal,
-    llm: createLlm({ provider: "scripted" }),
+    llm: opts.llm ?? createLlm({ provider: "scripted" }),
     triage: { kind: "triage", run: triageReport },
+    ...(opts.config ? { config: opts.config } : {}),
     defer: (task) => {
       pending.push(task);
     },

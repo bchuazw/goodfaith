@@ -34,15 +34,64 @@ export interface TriageDeps {
 
 export interface TriageOptions {
   onEvent?: (e: TriageEvent) => void;
+  /**
+   * Cancels the run: every LLM call and the replay are aborted, and triageReport rejects with the
+   * signal's reason (an Error named "AbortError" when there is none). Nothing is decided after an abort.
+   */
   signal?: AbortSignal;
+  /**
+   * Wall-clock budget for all LLM calls in this run, in ms. A call still running when it is used up is
+   * cancelled, and the remaining LLM judgments fall back to their deterministic stand-ins, so the run
+   * still finishes. Unset: no budget beyond the LLM's own per-call timeout.
+   */
+  llmBudgetMs?: number;
+}
+
+/** What triageReport rejects with when its signal aborts. */
+export function triageAbortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const e = new Error(typeof signal.reason === "string" && signal.reason ? signal.reason : "Triage was cancelled");
+  e.name = "AbortError";
+  return e;
 }
 
 export async function triageReport(report: ReportInput, deps: TriageDeps, opts: TriageOptions = {}): Promise<TriageVerdict> {
+  const budget = llmBudget(opts.signal, opts.llmBudgetMs);
+  try {
+    return await runTriage(report, deps, opts, budget.signal);
+  } finally {
+    budget.dispose();
+  }
+}
+
+/** A signal for LLM calls: aborts with the run's signal, or when the LLM budget is used up. */
+function llmBudget(outer: AbortSignal | undefined, budgetMs: number | undefined): { signal: AbortSignal | undefined; dispose: () => void } {
+  if (!(typeof budgetMs === "number" && Number.isFinite(budgetMs) && budgetMs > 0)) return { signal: outer, dispose: () => undefined };
+  const ctl = new AbortController();
+  const onOuter = () => ctl.abort(outer?.reason);
+  if (outer?.aborted) onOuter();
+  else outer?.addEventListener("abort", onOuter, { once: true });
+  const timer = setTimeout(() => ctl.abort(new Error(`the AI time budget (${Math.round(budgetMs / 1000)} s) was used up`)), budgetMs);
+  return {
+    signal: ctl.signal,
+    dispose: () => {
+      clearTimeout(timer);
+      outer?.removeEventListener("abort", onOuter);
+    },
+  };
+}
+
+async function runTriage(report: ReportInput, deps: TriageDeps, opts: TriageOptions, llmSignal: AbortSignal | undefined): Promise<TriageVerdict> {
   const now = deps.now ?? (() => new Date());
   const at = () => now().toISOString();
   const startedAt = at();
   const findings: Finding[] = [];
   const slopSignals: string[] = [];
+  /** Stops the run once the caller aborts; an LLM failure caused by that abort must not become a verdict. */
+  const checkAborted = () => {
+    if (opts.signal?.aborted) throw triageAbortError(opts.signal);
+  };
+  const llmOpts = llmSignal ? { signal: llmSignal } : {};
 
   const emit = (e: TriageEvent) => opts.onEvent?.(e);
   const stage = (s: TriageStage, status: "start" | "done", note?: string) => emit({ type: "stage", stage: s, status, ...(note ? { note } : {}), at: at() });
@@ -52,11 +101,13 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
   };
 
   // --- 1. claims --------------------------------------------------------------------------------
+  checkAborted();
   stage("claims", "start");
   let claimsOut: ClaimsOutput;
   try {
-    claimsOut = await deps.llm.structured({ system: CLAIMS_SYSTEM, user: claimsUser(report), schema: claimsSchema, name: "triage_claims" });
+    claimsOut = await deps.llm.structured({ system: CLAIMS_SYSTEM, user: claimsUser(report), schema: claimsSchema, name: "triage_claims", ...llmOpts });
   } catch {
+    checkAborted();
     claimsOut = { components: [], impact: "", preconditions: [] };
   }
   const version = (report.claimedVersion ?? claimsOut.version)?.trim() || undefined;
@@ -66,6 +117,7 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
   stage("claims", "done", vulnClass ? `${vulnClass}${version ? ` in ${version}` : ""}` : "claims extracted");
 
   // --- 2. version -------------------------------------------------------------------------------
+  checkAborted();
   stage("version", "start");
   const resolvedRef = version ? await deps.code.resolveVersion(version) : undefined;
   const versionProvided = Boolean(version);
@@ -82,6 +134,7 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
   stage("version", "done");
 
   // --- 3. code references -----------------------------------------------------------------------
+  checkAborted();
   stage("code_refs", "start");
   let codeRefs: CodeRefResult = { findings: [], hardFailure: false, nearMatchOnly: false };
   if (resolvedRef && components.length > 0) {
@@ -107,6 +160,7 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
   stage("code_refs", "done");
 
   // --- 4. duplicates ----------------------------------------------------------------------------
+  checkAborted();
   stage("duplicates", "start");
   const primaryComp = primaryComponentKey(components);
   const candidates = (deps.priorReports ?? []).filter((p) => p.verdict === "REPRODUCED");
@@ -120,9 +174,11 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
         user: duplicateUser({ vulnClass, component: primaryComp, title: report.title, summary: claimsOut.impact }, candidates),
         schema: duplicateSchema,
         name: "triage_duplicate",
+        ...llmOpts,
       });
       matches = out.matches;
     } catch {
+      checkAborted();
       matches = [];
     }
     const scored = candidates
@@ -151,6 +207,7 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
   stage("duplicates", "done");
 
   // --- 5. replay --------------------------------------------------------------------------------
+  checkAborted();
   stage("replay", "start");
   const poc = toStrictPoc(report.poc ?? toCorePoc(claimsOut.poc));
   let replay: ReplayResult | undefined;
@@ -165,6 +222,7 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
     addFinding(mk("poc", "inconclusive", "No runnable PoC", "The report contains no HTTP proof of concept to replay."));
   } else {
     replay = await deps.target.replay(poc, resolvedRef, opts.signal ? { signal: opts.signal } : undefined);
+    checkAborted();
     for (const step of replay.steps) emit({ type: "replay_step", step, at: at() });
     canaryHit = replay.canaryHits.length > 0;
     if (canaryHit) {
@@ -179,6 +237,7 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
   stage("replay", "done");
 
   // --- 6. assessment ----------------------------------------------------------------------------
+  checkAborted();
   stage("assess", "start");
   const impossibleImpact = computeImpossibleImpact(report.body, vulnClass, canaryHit);
   const ev = {
@@ -195,8 +254,9 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
   };
   let assessment: AssessmentOutput;
   try {
-    assessment = await deps.llm.structured({ system: ASSESS_SYSTEM, user: assessUser(report, claimsOut, ev), schema: assessmentSchema, name: "triage_assessment" });
+    assessment = await deps.llm.structured({ system: ASSESS_SYSTEM, user: assessUser(report, claimsOut, ev), schema: assessmentSchema, name: "triage_assessment", ...llmOpts });
   } catch {
+    checkAborted();
     const fallbackScore = canaryHit ? 0.02 : ev.claimedVersionInvalid || ev.hardCodeRefFailure || injectionDetected ? 0.85 : 0.2;
     assessment = { slopScore: fallbackScore, slopReasons: [], injectionSuspected: injectionDetected };
   }
@@ -205,6 +265,7 @@ export async function triageReport(report: ReportInput, deps: TriageDeps, opts: 
   stage("assess", "done");
 
   // --- 7. verdict -------------------------------------------------------------------------------
+  checkAborted();
   stage("verdict", "start");
   const decision = decideVerdict({
     versionProvided,

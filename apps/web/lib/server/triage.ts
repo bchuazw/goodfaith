@@ -59,11 +59,23 @@ export async function runTriage(svc: Services, reportId: string): Promise<void> 
   svc.signals.notify(reportId);
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), svc.config.triageTimeoutMs);
+  const limitS = Math.round(svc.config.triageTimeoutMs / 1000);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // The hard limit does not trust the engine to honour the abort: the run is raced against it, so a
+  // hung model or tool can never keep the attempt "triaging" until the platform kills the function.
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const reason = new Error(`Triage stopped after ${limitS} s`);
+      reason.name = "AbortError";
+      controller.abort(reason);
+      reject(reason);
+    }, svc.config.triageTimeoutMs);
+  });
   // onEvent is synchronous; appends are chained so the stored order is the emitted order.
   let chain: Promise<void> = Promise.resolve();
   let appendError: unknown;
   const onEvent = (event: TriageEvent) => {
+    if (controller.signal.aborted) return; // a run past its limit must not keep writing to the attempt
     const entry: TriageEventEntry = { attempt, event };
     chain = chain
       .then(async () => {
@@ -76,11 +88,14 @@ export async function runTriage(svc: Services, reportId: string): Promise<void> 
   };
 
   try {
-    const verdict = await svc.triage.run(
-      report.input,
-      { llm: svc.llm, code: svc.code, target: svc.target, priorReports: await priorReports(svc, report), now: svc.now },
-      { onEvent, signal: controller.signal },
-    );
+    const verdict = await Promise.race([
+      svc.triage.run(
+        report.input,
+        { llm: svc.llm, code: svc.code, target: svc.target, priorReports: await priorReports(svc, report), now: svc.now },
+        { onEvent, signal: controller.signal, llmBudgetMs: svc.config.triageLlmBudgetMs },
+      ),
+      deadline,
+    ]);
     await chain;
     if (appendError) throw appendError;
     const checked = triageVerdictSchema.parse({ ...verdict, reportId });
@@ -93,7 +108,7 @@ export async function runTriage(svc: Services, reportId: string): Promise<void> 
   } catch (e) {
     await chain;
     const message = controller.signal.aborted
-      ? `Triage stopped after ${Math.round(svc.config.triageTimeoutMs / 1000)} s`
+      ? `Triage stopped after ${limitS} s; re-run it to try again`
       : e instanceof Error
         ? e.message.slice(0, 500)
         : String(e).slice(0, 500);

@@ -28,17 +28,23 @@ export type CallHooks = {
  * Runs one model call with a per-attempt timeout (AbortSignal + race), exponential backoff with jitter
  * on retryable failures (408/409/429/5xx, timeouts, network errors; honours retry-after), and one log
  * entry per attempt. Errors are normalised to `LlmError` with redacted messages.
+ *
+ * `signal` cancels the whole call: the in-flight attempt is aborted, no retry follows, a pending backoff
+ * ends early, and the call rejects with LlmError code "aborted" (never retryable).
  */
 export async function robustCall<T>(
   policy: RetryPolicy,
   meta: CallMeta,
   hooks: CallHooks,
   fn: (signal: AbortSignal) => Promise<Attempt<T>>,
+  signal?: AbortSignal,
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
+    if (signal?.aborted) throw abortedError(meta, signal);
     const controller = new AbortController();
     const started = Date.now();
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
     try {
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
@@ -53,7 +59,19 @@ export async function robustCall<T>(
           controller.abort();
         }, policy.timeoutMs);
       });
-      const result = await Promise.race([fn(controller.signal), timeout]);
+      const racers: Array<Promise<Attempt<T>>> = [fn(controller.signal), timeout];
+      if (signal) {
+        racers.push(
+          new Promise<never>((_, reject) => {
+            onAbort = () => {
+              reject(abortedError(meta, signal));
+              controller.abort();
+            };
+            signal.addEventListener("abort", onAbort, { once: true });
+          }),
+        );
+      }
+      const result = await Promise.race(racers);
       emit(hooks.log, {
         ...base(meta, attempt),
         ok: true,
@@ -63,7 +81,7 @@ export async function robustCall<T>(
       });
       return result.value;
     } catch (err) {
-      const e = toLlmError(err, meta, hooks.redact);
+      const e = signal?.aborted ? abortedError(meta, signal) : toLlmError(err, meta, hooks.redact);
       const willRetry = e.retryable && attempt < policy.maxRetries;
       emit(hooks.log, {
         ...base(meta, attempt),
@@ -74,10 +92,59 @@ export async function robustCall<T>(
         willRetry,
       });
       if (!willRetry) throw e;
-      await (hooks.sleep ?? sleep)(backoffMs(attempt, policy, e.retryAfterMs));
+      await abortableSleep(hooks.sleep ?? sleep, backoffMs(attempt, policy, e.retryAfterMs), signal);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
+      if (onAbort) signal?.removeEventListener("abort", onAbort);
     }
+  }
+}
+
+/** The error a cancelled call rejects with. Not retryable, and never a reason to fall back to another model. */
+export function abortedError(meta: Pick<CallMeta, "provider" | "model">, signal?: AbortSignal): LlmError {
+  const reason = signal?.reason;
+  const why = reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "";
+  return new LlmError(`Model call was cancelled${why && !/aborted/i.test(why) ? `: ${why}` : ""}`, {
+    code: "aborted",
+    provider: meta.provider,
+    model: meta.model,
+    retryable: false,
+  });
+}
+
+/** Backoff that ends as soon as `signal` aborts (the next loop iteration then throws "aborted"). */
+async function abortableSleep(sleepFn: (ms: number) => Promise<void>, ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return sleepFn(ms);
+  if (signal.aborted) return;
+  let onAbort: (() => void) | undefined;
+  try {
+    await Promise.race([
+      sleepFn(ms),
+      new Promise<void>((resolve) => {
+        onAbort = () => resolve();
+        signal.addEventListener("abort", onAbort, { once: true });
+      }),
+    ]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
+}
+
+/** Rejects with the "aborted" LlmError when `signal` aborts first (used for tool execution). */
+export async function raceAbort<T>(p: Promise<T>, signal: AbortSignal | undefined, meta: Pick<CallMeta, "provider" | "model">): Promise<T> {
+  if (!signal) return p;
+  if (signal.aborted) throw abortedError(meta, signal);
+  let onAbort: (() => void) | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        onAbort = () => reject(abortedError(meta, signal));
+        signal.addEventListener("abort", onAbort, { once: true });
+      }),
+    ]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
   }
 }
 
