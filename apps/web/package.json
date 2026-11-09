@@ -18,6 +18,7 @@
     "@goodfaith/paypal": "workspace:*",
     "@goodfaith/target": "workspace:*",
     "@goodfaith/triage": "workspace:*",
+    "@upstash/redis": "^1.41.0",
     "ag-grid-community": "36.2.0",
     "ag-grid-react": "36.2.0",
     "class-variance-authority": "^0.7.1",

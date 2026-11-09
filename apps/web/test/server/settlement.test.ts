@@ -7,7 +7,8 @@ import { pollPayout } from "@/lib/server/payouts";
 import { submitReport } from "@/lib/server/reports";
 import { createServices } from "@/lib/server/services";
 import { settle, settlementContext, settlementOptions } from "@/lib/server/settlement";
-import { createMemoryStore } from "@/lib/server/store";
+import { createMemoryStore, createRedisStore, type Store } from "@/lib/server/store";
+import { createFakeRedis } from "./fake-redis";
 import { apiCalls, heroInput, testEnv, triagedClaim } from "./helpers";
 
 const refusal = async (p: Promise<unknown>) => {
@@ -142,12 +143,30 @@ describe("money rules", () => {
   });
 });
 
-describe("races between instances (shared Store, no shared memory)", () => {
+/** Two instances' stores over one shared backend: the same memory store, or two Redis adapters on one Redis. */
+const sharedStores: Array<[string, () => [Store, Store]]> = [
+  [
+    "memory",
+    () => {
+      const s = createMemoryStore();
+      return [s, s];
+    },
+  ],
+  [
+    "redis",
+    () => {
+      const redis = createFakeRedis();
+      return [createRedisStore(redis), createRedisStore(redis)];
+    },
+  ],
+];
+
+describe.each(sharedStores)("races between instances (shared %s Store, no shared memory)", (_name, stores) => {
   it("release and capture racing on the same SLOP deposit: exactly one resolution reaches PayPal", async () => {
-    const store = createMemoryStore();
+    const [storeA, storeB] = stores();
     const paypal = createMockPayPal({ seed: "race-1" });
-    const a = testEnv({ store, paypal });
-    const b = testEnv({ store, paypal });
+    const a = testEnv({ store: storeA, paypal });
+    const b = testEnv({ store: storeB, paypal });
     const id = await triagedClaim(a, "slop");
 
     const results = await Promise.allSettled([settle(a.svc, id, { action: "release" }), settle(b.svc, id, { action: "capture", confirm: true })]);
@@ -160,10 +179,10 @@ describe("races between instances (shared Store, no shared memory)", () => {
   });
 
   it("two pays racing create one payout batch", async () => {
-    const store = createMemoryStore();
+    const [storeA, storeB] = stores();
     const paypal = createMockPayPal({ seed: "race-2" });
-    const a = testEnv({ store, paypal });
-    const b = testEnv({ store, paypal });
+    const a = testEnv({ store: storeA, paypal });
+    const b = testEnv({ store: storeB, paypal });
     const id = await triagedClaim(a, "idor");
     await Promise.allSettled([settle(a.svc, id, { action: "pay" }), settle(b.svc, id, { action: "pay" })]);
     const batches = new Set(apiCalls(paypal, "createPayout").map((e) => e.id));

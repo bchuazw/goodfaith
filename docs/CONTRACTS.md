@@ -234,7 +234,7 @@ SLOP and DUPLICATE are recommendations. Money moves only on a maintainer's actio
 - `POST /api/sponsor/fund` (a CAPTURE order)
 - `POST /api/paypal/webhooks` (signature-verified)
 
-**Store:** a `Store` interface with a memory adapter and a JSON-file adapter (`.data/`, gitignored) for development. The production adapter will be chosen with hosting.
+**Store:** a `Store` interface with a memory adapter, a JSON-file adapter (`.data/`, gitignored) for development, and an Upstash Redis adapter for hosting (REST, `@upstash/redis`; compare-and-set is one Lua `EVAL`, so racing instances settle exactly once). Redis is chosen automatically when `KV_REST_API_URL`/`KV_REST_API_TOKEN` or `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` are set (key prefix `GOODFAITH_REDIS_PREFIX`, default `gf:` live, `gf:mock:` mock). On Vercel without them, live mode fails fast ("hosted store is not configured") instead of using the read-only filesystem.
 
 **Money rules (enforced server-side, tested):**
 - A deposit is voided or captured at most once.
