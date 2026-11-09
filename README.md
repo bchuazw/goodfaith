@@ -4,7 +4,7 @@
 
 **Live demo:** https://goodfaith-bounties.vercel.app (PayPal sandbox, so no real money moves)
 **Judge mode:** https://goodfaith-bounties.vercel.app/demo (three claims settle end to end in about two minutes)
-**Video:** _link added at submission_
+**Video:** [2:38 demo on the hosted app](https://youtu.be/NekFe7xzLMs)
 
 ---
 
