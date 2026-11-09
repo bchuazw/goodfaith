@@ -444,8 +444,20 @@ async function recordReal(context: BrowserContext, base: string): Promise<Segmen
   await click(page, page.getByRole("button", { name: /Pay the bounty/ }));
   const dialog = page.getByRole("dialog");
   await dialog.waitFor({ state: "visible" });
-  await sleep(2200);
-  await click(page, dialog.getByRole("button", { name: /^Pay \$/ }), { scroll: false, pause: 350 });
+  await sleep(1400);
+  // The narration says $500: the maintainer rates reading another user's private note as High, whatever
+  // Claude suggested (the dialog defaults to the suggestion). Warn if the button does not read $500.
+  const severity = dialog.getByLabel("Severity to pay");
+  if (await severity.isEnabled().catch(() => false)) {
+    await click(page, severity, { scroll: false });
+    await severity.selectOption("high");
+    await sleep(900);
+  }
+  const payButton = dialog.getByRole("button", { name: /^Pay \$/ });
+  const payLabel = (await payButton.innerText()).trim();
+  if (!/\$500\.00/.test(payLabel)) console.log(`  WARNING: the pay button reads "${payLabel}", the narration says $500`);
+  await sleep(1200);
+  await click(page, payButton, { scroll: false, pause: 350 });
   await page.getByText("Bounty sent with PayPal Payouts").first().waitFor({ timeout: 90_000 });
   seg.mark("paid");
   await sleep(900);
