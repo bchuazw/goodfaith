@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Money } from "@/components/money";
 import { SponsorFund } from "@/components/program/sponsor-fund";
 import { HallOfFame, TransparencyTiles } from "@/components/program/transparency";
+import { TransparencyCharts } from "@/components/program/transparency-charts";
 import { SeverityLabel } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -199,6 +200,7 @@ export default async function ProgramPage() {
           <p className="text-sm text-muted-foreground">Computed live from the program&apos;s records. Nothing here is seeded.</p>
         </div>
         <TransparencyTiles stats={stats} />
+        <TransparencyCharts stats={stats} />
         <HallOfFame stats={stats} />
       </section>
     </div>

@@ -19,6 +19,8 @@
     "@goodfaith/target": "workspace:*",
     "@goodfaith/triage": "workspace:*",
     "@upstash/redis": "^1.41.0",
+    "ag-charts-community": "^14.3.0",
+    "ag-charts-react": "^14.3.0",
     "ag-grid-community": "36.2.0",
     "ag-grid-react": "36.2.0",
     "class-variance-authority": "^0.7.1",

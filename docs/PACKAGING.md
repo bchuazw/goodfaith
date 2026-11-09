@@ -102,13 +102,23 @@ In January 2026 curl, one of the most widely deployed pieces of software on Eart
 - Every component runs with zero keys, using mocks that the UI labels MOCK. The hosted demo uses the real PayPal sandbox and real Claude.
 
 ### Challenges
-TBD from the build (candidates: making "reproduced" objective with canaries; running proofs of concept safely with no network; holds expiring, and the 72-hour promise).
+- **Making "reproduced" a fact.** An LLM saying a bug is real is an opinion. We seed every sandbox run with secret canaries (Bob's private note, `secrets.env`, an admin-only list) and replay the proof of concept against a fresh, network-isolated instance of the project. Either a canary reaches an account that should not see it, or it doesn't.
+- **Never charging an honest researcher by machine.** The verdict policy is deliberately asymmetric: a canary hit is proof, but SLOP needs hard evidence (a cited function or version that does not exist, or an instruction aimed at the AI) *and* a high slop score, and a maintainer still has to confirm the capture. On curl's real reports this means 8 of 10 published slop reports go to a human rather than being punished automatically, because they cite real code. We chose that over a better-looking number.
+- **Reading reports as untrusted input.** Slop farms will write for the triager. Report text is spotlighted as data in every prompt, hidden instructions are detected and count against the report, and a report with a real PoC still reproduces even when it also contains an injection.
+- **Serverless time limits.** Triage runs inside a 300-second Vercel function. Every model call takes an abort signal, timeouts are budgeted per call, and if the model fails or stalls the run finishes on the deterministic checks in a labelled degraded mode that can never say SLOP.
+- **Exactly-once money.** Payouts use the report id as `sender_batch_id`, every PayPal call carries a fixed request id, and settlement is a compare-and-set on the store, so a retry or a second maintainer click can never pay or capture twice.
 
 ### Accomplishments
-TBD (the eval numbers, curl's real-world corpus, payouts that are idempotent end to end).
+- The complete loop runs live on the PayPal sandbox: hold, triage, then void plus Payout, void, or capture, with real ids in the console.
+- 30 of 30 reports triaged correctly by Claude Opus 5.5 on our Lantern corpus (8 real bugs, 11 slop, 8 for human review, 3 duplicates), with zero honest reports called slop; the same 30 of 30 with the zero-key scripted model.
+- On curl's real, published reports: 0 of 5 real CVEs flagged as slop.
+- Lantern: a real two-version notes app with three CWE-mapped bugs, written for this project, so the demo reproduces real vulnerabilities rather than mocked ones.
+- Every component runs with zero keys and mocks the UI labels MOCK, so judges can also run it locally in a minute.
 
 ### What we learned
-TBD.
+- Authorization holds map cleanly onto deposits: `AUTHORIZE`, then `void` or `capture`, with the 3-day honor period becoming the product's triage promise. The approval sheet still says "Pay", which is the one place buyers may hesitate.
+- Idempotency is the best PayPal feature nobody talks about: `PayPal-Request-Id` and `sender_batch_id` turned "pay exactly once" from a hard distributed-systems problem into a convention.
+- Most AI slop about real projects cites real code. Fabrication checks catch the lazy fraction; the rest needs reproduction or a human, so a product that promises to "catch all slop" is itself slop.
 
 ### What's next
 - A GitHub App for security advisories.
@@ -119,8 +129,8 @@ TBD.
 ### Built with
 `paypal-orders-v2`, `paypal-payouts`, `paypal-disputes`, `paypal-webhooks`, `paypal-js-sdk-v6`, `claude`, `anthropic-api`, `typescript`, `next.js`, `react`, `ag-grid`, `hono`, `zod`, `vitest`, `tailwindcss`
 
-### Testing instructions for judges (fill before submission)
-The hosted URL, the `/demo` judge mode, the sandbox buyer login for the PayPal approval sheet, and what to expect in each scenario. Optionally, how to run it locally with zero keys.
+### Testing instructions for judges
+See `paypal-ai/docs/DEVPOST_ANSWERS.md` Q12: judge mode at `/demo` runs the three scenarios on the hosted app (live mode places the hold on the demo researcher's saved sandbox wallet, so no PayPal login is needed); the report form with the PayPal button needs the sandbox buyer login, filled in at submission.
 
 ## 5. Claims ledger
 | Claim | Proof | Status |
