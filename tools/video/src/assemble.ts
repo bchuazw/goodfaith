@@ -182,19 +182,20 @@ export async function assemble(): Promise<void> {
   }
   await closeRenderer();
 
-  // 3. Video: crossfades and cuts, one filtergraph.
+  // 3. Video: crossfades and cuts, one filtergraph. xfade insists that both inputs share a timebase, and
+  // concat emits 1/1000000 while fps emits 1/30, so every link is pinned to AVTB after each step.
   const vInputs = plans.flatMap((p) => ["-i", p.file as string]);
-  const parts: string[] = plans.map((_, i) => `[${i}:v]settb=AVTB,setpts=PTS-STARTPTS,fps=${FPS},format=yuv420p[b${i}]`);
+  const parts: string[] = plans.map((_, i) => `[${i}:v]setpts=PTS-STARTPTS,fps=${FPS},format=yuv420p,settb=AVTB[b${i}]`);
   let cur = "b0";
   let acc = plans[0]?.seconds ?? 0;
   for (let i = 1; i < plans.length; i++) {
     const p = plans[i] as Plan;
     const out = `v${i}`;
     if (p.fadeIn) {
-      parts.push(`[${cur}][b${i}]xfade=transition=fade:duration=${xf}:offset=${r3(acc - xf)}[${out}]`);
+      parts.push(`[${cur}][b${i}]xfade=transition=fade:duration=${xf}:offset=${r3(acc - xf)},settb=AVTB[${out}]`);
       acc += p.seconds - xf;
     } else {
-      parts.push(`[${cur}][b${i}]concat=n=2:v=1:a=0[${out}]`);
+      parts.push(`[${cur}][b${i}]concat=n=2:v=1:a=0,settb=AVTB[${out}]`);
       acc += p.seconds;
     }
     cur = out;

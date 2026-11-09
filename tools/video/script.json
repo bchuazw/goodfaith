@@ -269,7 +269,7 @@
         {
           "id": "proof-2",
           "narration": "We also ran triage on curl's real reports. Zero of five real CVEs were flagged as slop. Slop that cites invented code was caught; slop about real code goes to a human, never to a machine.",
-          "action": "Stat cards: 0 of 5 real curl CVEs flagged as slop; 2 of 10 published slop reports caught on hard evidence, 8 sent to a human; Lantern corpus 30/30 scripted, 6/6 live Claude, 0 honest reports called slop.",
+          "action": "Stat cards: 0 of 5 real curl CVEs flagged as slop; 2 of 10 published slop reports caught on hard evidence, 8 sent to a human; Lantern corpus 30/30 with live Claude, 30/30 scripted, 0 honest reports called slop.",
           "visual": {
             "card": "proof-evals"
           },

@@ -98,7 +98,7 @@ ${chapters}
 
 Measured results (packages/triage/evals)
 - curl's real reports: 0 of 5 real CVE reports flagged as slop; 2 of 10 published AI-slop reports caught on hard evidence (they cite code that doesn't exist); the other 8 cite real code and go to a human.
-- Lantern test corpus: 30/30 scripted, 6/6 with live Claude Opus 5.5, 0 honest reports called slop.
+- Lantern test corpus: 30/30 with live Claude Opus 5.5, and 30/30 scripted; 0 honest reports called slop.
 
 Built with
 PayPal Orders v2 (AUTHORIZE and CAPTURE), Payments v2 (void, capture), Payouts, Disputes, Webhooks, JS SDK v6 · Claude Opus 5.5 (Anthropic API) · TypeScript · Next.js · React · AG Grid · Hono · zod · Vitest

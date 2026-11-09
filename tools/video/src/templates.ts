@@ -222,9 +222,9 @@ export function proofEvals(): string {
         <div class="row">
           ${stat("0 of 5", "var(--success-strong)", "real curl CVE reports flagged as slop", "The control set: honest research is never charged by a machine.")}
           ${stat("2 of 10", "var(--danger-strong)", "published AI-slop reports caught on hard evidence", "They cite code that doesn't exist. The other 8 cite real code, so they go to a human.")}
-          ${stat("30 / 30", "var(--primary)", "Lantern test corpus, scripted", "6 / 6 with live Claude Opus 5.5. 0 honest reports called slop.")}
+          ${stat("30 / 30", "var(--primary)", "Lantern test corpus, with live Claude Opus 5.5", "The same 30 / 30 with the zero-key scripted model. 0 honest reports called slop.")}
         </div>
-        <div class="mono foot">packages/triage/evals · results.curl.json, results.json, results.live.json · measured 24 Oct 2026</div>
+        <div class="mono foot">packages/triage/evals · results.curl.json, results.json, results.live.json · measured 24 Oct and 9 Nov 2026</div>
       </div>
     </div>`,
     {
