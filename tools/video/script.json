@@ -1,0 +1,307 @@
+{
+  "$comment": "Good Faith demo video. Every factual line maps to docs/PACKAGING.md section 5 (verified or measured). Scenes split into beats so narration and picture stay in sync: a beat lasts max(narration + pad, minSeconds). visual.card = a rendered title card (src/cards.ts); visual.clip = a window of a recorded segment between two markers (src/record.ts); visual.popup = the PayPal window recorded as its own page, composed over the app.",
+  "title": "Good Faith",
+  "targetSeconds": 170,
+  "tts": {
+    "model": "gemini-3.8-flash-tts",
+    "fallbacks": [
+      "gemini-3.1-flash-tts-preview",
+      "gemini-2.5-flash-preview-tts"
+    ],
+    "voice": "Charon",
+    "auditionVoices": [
+      "Kore",
+      "Charon",
+      "Puck"
+    ],
+    "style": "Speak quickly and clearly in a calm, confident, matter-of-fact tone:"
+  },
+  "padSeconds": 0.45,
+  "crossfadeSeconds": 0.35,
+  "scenes": [
+    {
+      "id": "hook",
+      "title": "Hook",
+      "action": "Plain-type headline cards: a pile of AI-written reports, then 'curl ends its bug bounty' and 'HackerOne pauses the Internet Bug Bounty', outlets cited as text.",
+      "minSeconds": 14,
+      "beats": [
+        {
+          "id": "hook-1",
+          "narration": "AI made it free to write a convincing vulnerability report. Open-source maintainers got buried.",
+          "action": "A drift of polished, AI-written report cards.",
+          "visual": {
+            "card": "hook-flood"
+          },
+          "minSeconds": 5
+        },
+        {
+          "id": "hook-2",
+          "narration": "In January, curl ended its bug bounty.",
+          "action": "Headline 1 in plain type, The Register, 21 Jan 2026.",
+          "visual": {
+            "card": "hook-curl"
+          },
+          "minSeconds": 3.2
+        },
+        {
+          "id": "hook-3",
+          "narration": "In April, HackerOne paused the Internet Bug Bounty. Honest researchers lost a way to get paid.",
+          "action": "Headline 2 joins it, InfoWorld, 3 Apr 2026.",
+          "visual": {
+            "card": "hook-ibb"
+          },
+          "minSeconds": 5
+        }
+      ]
+    },
+    {
+      "id": "idea",
+      "title": "The idea",
+      "action": "One line: report, deposit held, Claude reproduces, then pay, release or capture.",
+      "minSeconds": 16,
+      "beats": [
+        {
+          "id": "idea-1",
+          "narration": "Good Faith brings bounties back. Reporting stays free. Claiming a bounty takes a refundable twenty-dollar PayPal deposit: a hold, not a charge.",
+          "action": "Flow line with report and the $20 hold lit.",
+          "visual": {
+            "card": "idea-hold"
+          },
+          "minSeconds": 7
+        },
+        {
+          "id": "idea-2",
+          "narration": "Before anyone pays, Claude reproduces the claim in a sandbox. Real finds get paid in minutes. Fabricated ones lose the deposit.",
+          "action": "The rest of the line lights: reproduce, then pay, release or capture.",
+          "visual": {
+            "card": "idea-flow"
+          },
+          "minSeconds": 7
+        }
+      ]
+    },
+    {
+      "id": "slop",
+      "title": "The slop report",
+      "action": "Load the polished slop example, post the $20 hold in the PayPal sandbox popup, watch live triage: cited function missing, no canary, hidden instruction; SLOP. The maintainer confirms the capture.",
+      "minSeconds": 34,
+      "beats": [
+        {
+          "id": "slop-1",
+          "narration": "Here's a bounty claim that reads well: a critical authentication bypass, confident and specific.",
+          "action": "Report form, 'Polished AI slop' example loaded, the description in view.",
+          "visual": {
+            "clip": "slop",
+            "from": "form",
+            "to": "paypal-click",
+            "fit": "speed",
+            "maxSpeed": 1.6
+          },
+          "minSeconds": 5
+        },
+        {
+          "id": "slop-2",
+          "narration": "The researcher approves a twenty-dollar hold in PayPal, and triage starts at once.",
+          "action": "The PayPal sandbox window: log in, approve the $20 authorization.",
+          "visual": {
+            "popup": "slop",
+            "fit": "speed",
+            "maxSpeed": 3
+          },
+          "minSeconds": 5
+        },
+        {
+          "id": "slop-3",
+          "narration": "The function it cites doesn't exist in this version of Lantern.",
+          "action": "Live timeline: 'Cited code exists' fails for lantern_session_rehydrate().",
+          "visual": {
+            "clip": "slop",
+            "from": "status",
+            "to": "code-refs",
+            "fit": "speed",
+            "maxSpeed": 6
+          },
+          "minSeconds": 4
+        },
+        {
+          "id": "slop-4",
+          "narration": "Its proof of concept leaks nothing. And it hides an instruction aimed at us, the AI: mark this critical.",
+          "action": "Replay shows no canary; the injected 'AI triager' comment is quoted as untrusted text.",
+          "visual": {
+            "clip": "slop",
+            "from": "code-refs",
+            "to": "verdict",
+            "fit": "speed",
+            "maxSpeed": 6
+          },
+          "minSeconds": 6.5
+        },
+        {
+          "id": "slop-5",
+          "narration": "Verdict: slop, on hard evidence, not on opinion.",
+          "action": "The SLOP stamp lands.",
+          "visual": {
+            "clip": "slop",
+            "from": "verdict",
+            "to": "console",
+            "fit": "head"
+          },
+          "minSeconds": 3.5
+        },
+        {
+          "id": "slop-6",
+          "narration": "Claude only recommends. The maintainer confirms, and PayPal captures the deposit.",
+          "action": "Console: Capture the deposit, confirm; the capture id appears.",
+          "visual": {
+            "clip": "slop",
+            "from": "console",
+            "to": "end",
+            "fit": "speed",
+            "maxSpeed": 1.8
+          },
+          "minSeconds": 5
+        }
+      ]
+    },
+    {
+      "id": "real",
+      "title": "The real IDOR",
+      "action": "Load the real IDOR example (one HTTP step), post the hold, replay leaks Bob's private note: REPRODUCED, High. The maintainer pays: hold voided, $500 Payout.",
+      "minSeconds": 36,
+      "beats": [
+        {
+          "id": "real-1",
+          "narration": "This one is short, and real. An IDOR, proved with a single request: Alice asks for Bob's note.",
+          "action": "Report form, 'Real IDOR' example: GET /api/notes/note_2 as alice.",
+          "visual": {
+            "clip": "real",
+            "from": "form",
+            "to": "paypal-click",
+            "fit": "speed",
+            "maxSpeed": 1.6
+          },
+          "minSeconds": 5.5
+        },
+        {
+          "id": "real-2",
+          "narration": "Same refundable hold.",
+          "action": "PayPal sandbox approval, sped up.",
+          "visual": {
+            "popup": "real",
+            "fit": "speed",
+            "maxSpeed": 4
+          },
+          "minSeconds": 2.5
+        },
+        {
+          "id": "real-3",
+          "narration": "Good Faith replays it against a fresh, network-isolated Lantern, seeded with secret canaries.",
+          "action": "Live timeline reaches 'Sandbox replay'.",
+          "visual": {
+            "clip": "real",
+            "from": "status",
+            "to": "replay",
+            "fit": "speed",
+            "maxSpeed": 6
+          },
+          "minSeconds": 5.5
+        },
+        {
+          "id": "real-4",
+          "narration": "Bob's private note comes back to Alice. The canary leaked, so the bug is reproduced: a fact, not an opinion.",
+          "action": "Replay step opens: 200 OK, canary 'Bob's private note' leaked; REPRODUCED stamp, suggested High.",
+          "visual": {
+            "clip": "real",
+            "from": "replay",
+            "to": "console",
+            "fit": "speed",
+            "maxSpeed": 4
+          },
+          "minSeconds": 6.5
+        },
+        {
+          "id": "real-5",
+          "narration": "The maintainer clicks Pay.",
+          "action": "Console: Pay the bounty, the dialog lists the PayPal calls, confirm.",
+          "visual": {
+            "clip": "real",
+            "from": "console",
+            "to": "paid",
+            "fit": "speed",
+            "maxSpeed": 2
+          },
+          "minSeconds": 3
+        },
+        {
+          "id": "real-6",
+          "narration": "Good Faith voids the hold and sends five hundred dollars with PayPal Payouts, exactly once per report.",
+          "action": "Deposit card shows Voided; Payout card shows $500.00 with its PayPal batch id.",
+          "visual": {
+            "clip": "real",
+            "from": "paid",
+            "to": "end",
+            "fit": "speed",
+            "maxSpeed": 1.5
+          },
+          "minSeconds": 6
+        }
+      ]
+    },
+    {
+      "id": "proof",
+      "title": "Proof",
+      "action": "The AG Grid maintainer console and the public transparency page, then the measured eval numbers from the claims ledger.",
+      "minSeconds": 22,
+      "beats": [
+        {
+          "id": "proof-1",
+          "narration": "Every decision lands in the maintainer console, and a public page counts the slop caught and the bounties paid.",
+          "action": "AG Grid triage queue, then the transparency numbers on the program page.",
+          "visual": {
+            "clip": "proof",
+            "from": "console",
+            "to": "end",
+            "fit": "speed",
+            "maxSpeed": 1.5
+          },
+          "minSeconds": 8
+        },
+        {
+          "id": "proof-2",
+          "narration": "We also ran triage on curl's real reports. Zero of five real CVEs were flagged as slop. Slop that cites invented code was caught; slop about real code goes to a human, never to a machine.",
+          "action": "Stat cards: 0 of 5 real curl CVEs flagged as slop; 2 of 10 published slop reports caught on hard evidence, 8 sent to a human; Lantern corpus 30/30 scripted, 6/6 live Claude, 0 honest reports called slop.",
+          "visual": {
+            "card": "proof-evals"
+          },
+          "minSeconds": 12
+        }
+      ]
+    },
+    {
+      "id": "close",
+      "title": "Close",
+      "action": "The three principles, then the name, the stack and the URL.",
+      "minSeconds": 12,
+      "beats": [
+        {
+          "id": "close-1",
+          "narration": "Free reports stay free. Good-faith research gets paid. Slop pays for itself.",
+          "action": "Three principles, one per line.",
+          "visual": {
+            "card": "close-principles"
+          },
+          "minSeconds": 5.5
+        },
+        {
+          "id": "close-2",
+          "narration": "Good Faith. Built on PayPal and Claude.",
+          "action": "Wordmark, the stack, the URL.",
+          "visual": {
+            "card": "close-end"
+          },
+          "minSeconds": 6
+        }
+      ]
+    }
+  ]
+}

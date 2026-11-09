@@ -1,0 +1,22 @@
+{
+  "name": "@goodfaith/video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "The demo video pipeline: Gemini TTS narration, Playwright recording of the real app, HTML title cards and captions, ffmpeg assembly.",
+  "scripts": {
+    "serve": "tsx src/serve.ts",
+    "voices": "tsx src/tts.ts --audition",
+    "tts": "tsx src/tts.ts",
+    "cards": "tsx src/cards.ts",
+    "record": "tsx src/record.ts",
+    "assemble": "tsx src/assemble.ts",
+    "assets": "tsx src/assets.ts",
+    "all": "tsx src/all.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}
