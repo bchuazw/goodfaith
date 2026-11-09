@@ -222,7 +222,8 @@ ${j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? ""}`;
 async function main() {
   const a = args();
   const script = loadScript();
-  const models = [script.tts.model, ...script.tts.fallbacks];
+  // --models a,b restricts the run to those models (one model gives every clip the same voice character).
+  const models = typeof a.models === "string" ? a.models.split(",").map((m) => m.trim()).filter(Boolean) : [script.tts.model, ...script.tts.fallbacks];
   const style = script.tts.style;
 
   if (a.audition) {

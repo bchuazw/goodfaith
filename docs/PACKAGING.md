@@ -68,7 +68,7 @@ Open-source maintainers are drowning in AI-generated vulnerability reports that 
 **Recording:**
 - Playwright drives the real app at 1440×900, with clean seeded data and fixed demo accounts.
 - Every PayPal id on screen is real and matches the sandbox dashboard.
-- Voice: Gemini TTS (`gemini-3.8-flash-tts`, voice "Kore") works on the free key; a sample was verified on 2026-10-24. Decide on it, or Brian's own voice, by Nov 1.
+- Voice: Gemini TTS, voice "Charon" (auditioned against Kore and Puck on 2026-11-02); every clip is verified by transcript. The free tier allows roughly 15 clips a day per model, so `tools/video/script.json` lists fallbacks.
   - This machine only has legacy SAPI voices (David, Zira, Mark), which are too robotic.
   - Options: Gemini TTS with a free AI Studio key (natural, $0; the key also gives the hosted demo a fallback LLM that never expires), the user's own voice, or captions only.
 - Music: none, or a CC0 track.
