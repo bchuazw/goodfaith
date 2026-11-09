@@ -10,7 +10,8 @@ import { Money } from "@/components/money";
 import { DepositBadge, PayoutBadge, ReportStatusBadge, SeverityLabel, VerdictBadge } from "@/components/status";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client/api";
-import { timeAgo } from "@/lib/format";
+import { useClientNow } from "@/lib/client/use-client-now";
+import { formatDateTime, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { QueueRow } from "@/lib/view-types";
 
@@ -67,6 +68,7 @@ const cell = (node: React.ReactNode) => <div className="flex h-full items-center
 
 export function QueueGrid({ initial }: { initial: QueueRow[] }) {
   const router = useRouter();
+  const now = useClientNow();
   const [rows, setRows] = useState(initial);
   const [filter, setFilter] = useState<Filter>(() => (initial.some(FILTERS[0]?.test ?? (() => false)) ? "decide" : "all"));
   const [search, setSearch] = useState("");
@@ -217,7 +219,7 @@ export function QueueGrid({ initial }: { initial: QueueRow[] }) {
                 </div>
                 <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                   <span>@{r.handle}</span>
-                  <span>{timeAgo(r.submittedAt)}</span>
+                  <span>{now === undefined ? formatDateTime(r.submittedAt) : timeAgo(r.submittedAt, now)}</span>
                   <span className="font-mono">{r.id}</span>
                 </p>
               </Link>
