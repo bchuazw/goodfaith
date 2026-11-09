@@ -91,7 +91,7 @@ Everything in this video is the real app on the PayPal sandbox (test money only)
 
 Try it: https://goodfaith-bounties.vercel.app
 Judge mode (three claims settle end to end): https://goodfaith-bounties.vercel.app/demo
-Code (Apache-2.0): REPO_LINK_HERE
+Code (Apache-2.0): https://github.com/bchuazw/goodfaith
 
 Chapters
 ${chapters}

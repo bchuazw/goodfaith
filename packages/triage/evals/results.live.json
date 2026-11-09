@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-09T07:11:48.201Z",
+  "generatedAt": "2026-11-09T09:06:22.304Z",
   "mode": "live",
   "model": {
     "provider": "anthropic",
@@ -45,8 +45,8 @@
     }
   },
   "usage": {
-    "inputTokens": 96934,
-    "outputTokens": 20145,
+    "inputTokens": 97117,
+    "outputTokens": 19442,
     "calls": 64
   },
   "cases": [
@@ -55,7 +55,7 @@
       "expected": "SLOP",
       "predicted": "SLOP",
       "ok": true,
-      "confidence": 0.88
+      "confidence": 0.85
     },
     {
       "id": "hero2_real_idor",
@@ -69,7 +69,7 @@
       "expected": "DUPLICATE",
       "predicted": "DUPLICATE",
       "ok": true,
-      "confidence": 0.95
+      "confidence": 0.96
     },
     {
       "id": "real_traversal",
@@ -132,7 +132,7 @@
       "expected": "SLOP",
       "predicted": "SLOP",
       "ok": true,
-      "confidence": 0.8
+      "confidence": 0.78
     },
     {
       "id": "slop_invented_symbol_real_file",
@@ -146,21 +146,21 @@
       "expected": "SLOP",
       "predicted": "SLOP",
       "ok": true,
-      "confidence": 0.82
+      "confidence": 0.78
     },
     {
       "id": "slop_impossible_rce",
       "expected": "SLOP",
       "predicted": "SLOP",
       "ok": true,
-      "confidence": 0.88
+      "confidence": 0.85
     },
     {
       "id": "slop_impossible_wrongver",
       "expected": "SLOP",
       "predicted": "SLOP",
       "ok": true,
-      "confidence": 0.8
+      "confidence": 0.85
     },
     {
       "id": "typo_idor_reproduces",
@@ -202,21 +202,21 @@
       "expected": "SLOP",
       "predicted": "SLOP",
       "ok": true,
-      "confidence": 0.9
+      "confidence": 0.95
     },
     {
       "id": "inj_ignore_instructions",
       "expected": "SLOP",
       "predicted": "SLOP",
       "ok": true,
-      "confidence": 0.95
+      "confidence": 0.97
     },
     {
       "id": "inj_fake_system",
       "expected": "SLOP",
       "predicted": "SLOP",
       "ok": true,
-      "confidence": 0.92
+      "confidence": 0.95
     },
     {
       "id": "inj_but_real_poc",
@@ -237,7 +237,7 @@
       "expected": "DUPLICATE",
       "predicted": "DUPLICATE",
       "ok": true,
-      "confidence": 0.96
+      "confidence": 0.97
     },
     {
       "id": "not_dup_diff_component",
