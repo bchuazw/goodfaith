@@ -132,7 +132,7 @@ The hosted URL, the `/demo` judge mode, the sandbox buyer login for the PayPal a
 | An unregistered recipient's payout shows UNCLAIMED, not lost | the same live test (RECEIVER_UNREGISTERED) | verified 2026-10-24 |
 | Charging or releasing a hold works with no buyer present | the live suite (authorize → partial capture → void) | verified 2026-10-23 |
 | On curl's real reports: 0 of 5 real CVE reports flagged as slop; 2 of 10 published slop reports caught with hard evidence (they cite code that doesn't exist); the other 8 cite real code and go to a human, never punished automatically | `packages/triage/evals/results.curl.json` | measured 2026-10-24. Say it this way: never "catches all slop". |
-| Lantern evals: 30/30 correct scripted; 6/6 with live Claude Opus 5.5; false-SLOP 0 | `evals/results.json`, `results.live.json` | measured 2026-10-24 |
+| Lantern evals: 30/30 correct scripted; 30/30 with live Claude Opus 5.5; false-SLOP 0 in both | `evals/results.json`, `results.live.json` | measured 2026-10-24 (scripted), 2026-11-09 (live, all 30) |
 | Median time to triage | measured from hosted runs | TBD |
 
 ## 6. Visual assets

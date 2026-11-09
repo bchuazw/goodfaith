@@ -89,6 +89,22 @@ export function fileSymbols(content: string): string[] {
   return [...names];
 }
 
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
+
+/**
+ * A report that says "GET /api/notes/:id in src/notes.ts" cites a route, not a function. The extractor
+ * sometimes puts that route (or just the verb) in `symbol`; a route is never a definition, so looking it
+ * up would wrongly brand an honest report as citing code that does not exist. Such a symbol is dropped
+ * and the file alone is checked.
+ */
+export function normaliseComponent(comp: CodeLocation): CodeLocation {
+  const { symbol: raw, ...rest } = comp;
+  const symbol = raw?.trim().replace(/\(\)$/, "");
+  if (!symbol || !IDENTIFIER.test(symbol) || HTTP_METHODS.has(symbol.toUpperCase())) return rest;
+  return { ...rest, symbol };
+}
+
 export function primaryComponentKey(components: CodeLocation[]): string | undefined {
   const c = components.find((x) => x.path || x.symbol);
   if (!c) return undefined;
@@ -112,7 +128,7 @@ export async function checkCodeRefs(components: CodeLocation[], ref: string, cod
   }
 
   for (let i = 0; i < components.length; i++) {
-    const comp = components[i] as CodeLocation;
+    const comp = normaliseComponent(components[i] as CodeLocation);
     const isPrimary = i === 0;
 
     if (comp.symbol) {

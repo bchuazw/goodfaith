@@ -91,7 +91,7 @@ Notes: [docs/PAYPAL_NOTES.md](docs/PAYPAL_NOTES.md).
 | Evaluation | Result |
 |---|---|
 | Lantern corpus: 30 reports (8 real bugs, 11 slop, 8 for human review, 3 duplicates), scripted, no keys | 30/30 correct, **0 honest reports called slop** ([results](packages/triage/evals/results.json)) |
-| The same corpus with live Claude Opus 5.5 | _updating_ ([results](packages/triage/evals/results.live.json)) |
+| The same 30 reports with **live Claude Opus 5.5** | **30/30 correct, 0 honest reports called slop** ([results](packages/triage/evals/results.live.json)) |
 | **curl's real reports:** 10 AI-slop reports curl received and published, plus 5 real curl CVEs, checked against the real curl source | **0 of 5 real CVEs flagged as slop.** 2 of 10 slop reports caught with hard evidence (they cite code that doesn't exist); the other 8 cite real code, so they go to a human rather than being punished automatically ([results](packages/triage/evals/results.curl.json)) |
 
 The curl result is the honest shape of the problem. Code checks catch invented code; slop about *real* code needs reproduction or a human. Good Faith makes sure honest researchers are never charged by a machine.

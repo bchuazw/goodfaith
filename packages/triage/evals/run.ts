@@ -1,8 +1,9 @@
 // Eval runner: `pnpm --filter @goodfaith/triage eval`.
 //
 // Scripted mode (default, zero keys) triages every case; EVAL_LLM=live uses the real model on at
-// most 6 reports to verify the live path. Prints precision/recall per verdict and false-SLOP (which
-// must be 0), and writes evals/results.json.
+// most 6 reports to verify the live path (EVAL_LIVE_CAP=<n> raises that, EVAL_LIVE_CAP=all runs the
+// whole corpus). Prints precision/recall per verdict and false-SLOP (which must be 0), and writes
+// evals/results.json (scripted) or evals/results.live.json (live).
 
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,8 @@ import { triageReport } from "../src/index.js";
 import { EVAL_CASES } from "./reports.js";
 
 const LIVE = (process.env.EVAL_LLM ?? "").toLowerCase() === "live";
-const LIVE_CAP = 6;
+const LIVE_ALL = (process.env.EVAL_LIVE_CAP ?? "").toLowerCase() === "all";
+const LIVE_CAP = Number(process.env.EVAL_LIVE_CAP) || 6;
 
 interface Row {
   id: string;
@@ -44,7 +46,7 @@ async function main(): Promise<void> {
     llm = createLlm({ provider: "scripted" });
   }
 
-  const cases = LIVE ? EVAL_CASES.filter((c) => c.live).slice(0, LIVE_CAP) : EVAL_CASES;
+  const cases = LIVE && !LIVE_ALL ? EVAL_CASES.filter((c) => c.live).slice(0, LIVE_CAP) : EVAL_CASES;
   const code = lanternCodeSource();
 
   console.log(`\nGood Faith triage eval — mode=${LIVE ? "live" : "scripted"} (${llm.provider}/${llm.model}), ${cases.length} case(s)\n`);

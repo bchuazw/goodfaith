@@ -20,18 +20,43 @@ const API = "https://generativelanguage.googleapis.com/v1beta/models";
 
 type Clip = { file: string; seconds: number; model: string; voice: string; cached: boolean; transcript?: string; verified?: boolean };
 
-const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/s+/).filter(Boolean);
+const ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+/** Numbers up to 9999 as the words a transcript would use ("20" -> "twenty", "500" -> "five hundred"). */
+function numberWords(n: number): string {
+  if (n < 20) return ONES[n] as string;
+  if (n < 100) return `${TENS[Math.floor(n / 10)]}${n % 10 ? ` ${ONES[n % 10]}` : ""}`;
+  if (n < 1000) return `${ONES[Math.floor(n / 100)]} hundred${n % 100 ? ` ${numberWords(n % 100)}` : ""}`;
+  if (n < 10000) return `${numberWords(Math.floor(n / 1000))} thousand${n % 1000 ? ` ${numberWords(n % 1000)}` : ""}`;
+  return String(n);
+}
+
+/** Words of a line, with "$20" and "twenty-dollar" normalised to the same tokens. */
+const norm = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/\$\s?(\d+)/g, (_, d: string) => `${d} dollar`)
+    .replace(/\d+/g, (d) => numberWords(Number(d)))
+    .replace(/dollars\b/g, "dollar")
+    .replace(/[^a-z' ]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+/** Share of the line's words heard in the transcript (0..1). */
+export function similarity(text: string, transcript: string): number {
+  const want = norm(text);
+  const have = new Set(norm(transcript));
+  return want.filter((w) => have.has(w)).length / Math.max(1, want.length);
+}
 
 /**
  * Did the clip say the line, and only the line? TTS models sometimes read the style note aloud, so the
  * transcript is compared with the text: no more than two extra words and 85% of the words present.
  */
 export function matches(text: string, transcript: string): boolean {
-  const want = norm(text);
   const got = norm(transcript);
-  const have = new Set(got);
-  const hit = want.filter((w) => have.has(w)).length / Math.max(1, want.length);
-  return got.length <= want.length + 2 && hit >= 0.85;
+  return got.length <= norm(text).length + 2 && similarity(text, transcript) >= 0.85;
 }
 
 /** A 16-bit PCM WAV header around raw little-endian samples. */
@@ -96,6 +121,8 @@ async function tidy(input: string, output: string): Promise<void> {
 export async function speak(text: string, opts: { voice: string; style: string; models: string[] }): Promise<Clip> {
   const dir = ensureDir(path.join(CACHE, "tts"));
   let lastError: unknown;
+  // The closest take so far across models and attempts; used when no take verifies, rather than failing the run.
+  let best: { file: string; model: string; transcript: string; score: number; target: string } | undefined;
   for (const model of opts.models) {
     const key = crypto.createHash("sha256").update(JSON.stringify([model, opts.voice, opts.style, text])).digest("hex").slice(0, 16);
     const file = path.join(dir, `${key}.wav`);
@@ -126,12 +153,21 @@ export async function speak(text: string, opts: { voice: string; style: string; 
         }
         const verified = transcript === undefined ? false : matches(text, transcript);
         if (transcript !== undefined && !verified) {
-          fs.rmSync(candidate);
-          console.log(`  attempt ${attempt}: transcript does not match, regenerating ("${transcript.slice(0, 90)}")`);
+          const score = matches(text, `${transcript}`) ? 1 : similarity(text, transcript) - (norm(transcript).length > norm(text).length + 2 ? 0.5 : 0);
+          console.log(`  attempt ${attempt}: transcript does not match (${(score * 100).toFixed(0)}%), regenerating ("${transcript.slice(0, 90)}")`);
+          if (!best || score > best.score) {
+            if (best) fs.rmSync(best.file, { force: true });
+            const kept = path.join(dir, `${key}.best.wav`);
+            fs.renameSync(candidate, kept);
+            best = { file: kept, model, transcript, score, target: file };
+          } else {
+            fs.rmSync(candidate);
+          }
           continue;
         }
         fs.renameSync(candidate, file);
         fs.writeFileSync(sidecar, JSON.stringify({ text, transcript, verified }));
+        if (best) fs.rmSync(best.file, { force: true });
         return { file, seconds: duration(file), model, voice: opts.voice, cached: false, ...(transcript ? { transcript } : {}), verified };
       } catch (e) {
         lastError = e;
@@ -140,7 +176,14 @@ export async function speak(text: string, opts: { voice: string; style: string; 
       }
     }
   }
-  throw lastError;
+  if (best) {
+    // Nothing verified word for word: keep the closest take and say so, rather than stopping the pipeline.
+    console.log(`  WARNING: no take verified; keeping the closest (${(best.score * 100).toFixed(0)}%, ${best.model}). Listen to it: "${best.transcript.slice(0, 120)}"`);
+    fs.renameSync(best.file, best.target);
+    fs.writeFileSync(`${best.target}.json`, JSON.stringify({ text, transcript: best.transcript, verified: false }));
+    return { file: best.target, seconds: duration(best.target), model: best.model, voice: opts.voice, cached: false, transcript: best.transcript, verified: false };
+  }
+  throw lastError ?? new Error(`no model produced audio for "${text.slice(0, 60)}"`);
 }
 
 /** Asks Gemini (audio in) to rate the takes for a calm, credible narrator. A second opinion, not the decision. */
