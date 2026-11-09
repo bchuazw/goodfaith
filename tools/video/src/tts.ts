@@ -101,9 +101,11 @@ async function synthesize(model: string, voice: string, style: string, text: str
       return wav(data, rate);
     }
     const text = await res.text();
-    // Rate limits: honour the server's retry delay a few times before giving up on this model.
+    // Rate limits: honour a short retry delay a few times. A long one means the day's quota for this
+    // model is spent, so move on to the next model instead of waiting it out.
     if ((res.status === 429 || res.status >= 500) && attempt < 5) {
       const delay = Number(/"retryDelay":\s*"(\d+)/.exec(text)?.[1] ?? 20);
+      if (delay > 90) throw new Error(`${model}: HTTP 429 with a ${delay}s retry delay (quota spent)`);
       console.log(`  ${model}: HTTP ${res.status}, retrying in ${delay}s`);
       await sleep((delay + 1) * 1000);
       continue;
@@ -123,8 +125,18 @@ export async function speak(text: string, opts: { voice: string; style: string; 
   let lastError: unknown;
   // The closest take so far across models and attempts; used when no take verifies, rather than failing the run.
   let best: { file: string; model: string; transcript: string; score: number; target: string } | undefined;
+  const keyFor = (model: string) => crypto.createHash("sha256").update(JSON.stringify([model, opts.voice, opts.style, text])).digest("hex").slice(0, 16);
+  // A verified clip from any model beats synthesizing again: check every model's cache before calling one.
   for (const model of opts.models) {
-    const key = crypto.createHash("sha256").update(JSON.stringify([model, opts.voice, opts.style, text])).digest("hex").slice(0, 16);
+    const file = path.join(dir, `${keyFor(model)}.wav`);
+    const sidecar = `${file}.json`;
+    if (fs.existsSync(file) && fs.existsSync(sidecar)) {
+      const meta = JSON.parse(fs.readFileSync(sidecar, "utf8")) as { transcript?: string; verified?: boolean };
+      if (meta.verified) return { file, seconds: duration(file), model, voice: opts.voice, cached: true, ...meta };
+    }
+  }
+  for (const model of opts.models) {
+    const key = keyFor(model);
     const file = path.join(dir, `${key}.wav`);
     const sidecar = `${file}.json`;
     if (fs.existsSync(file) && !fs.existsSync(sidecar)) {
