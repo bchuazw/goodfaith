@@ -1,4 +1,7 @@
-/** Display formatting shared by server and client components. Times render in UTC on the server and local in the browser. */
+/**
+ * Display formatting shared by server and client components. Times render in UTC everywhere: the server has no
+ * idea of the viewer's zone, and a server/browser difference is a React hydration mismatch on every timestamp.
+ */
 
 export function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return "—";
@@ -26,12 +29,12 @@ export function timeAgo(iso: string | undefined, now = Date.now()): string {
 export function formatDateTime(iso: string | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZoneName: "short" });
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC", timeZoneName: "short" });
 }
 
 export function formatClock(iso: string | undefined): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "UTC" });
 }
 
 export const pct = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n}%`);
